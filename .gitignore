@@ -106,5 +106,6 @@ venv.bak/
 data/
 checkpoints/
 outputs/
+_expts/
 
 .DS_Store
