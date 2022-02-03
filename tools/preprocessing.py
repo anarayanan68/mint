@@ -28,6 +28,10 @@ flags.DEFINE_enum(
 flags.DEFINE_string(
     'tfrecord_path', './data/aist_tfrecord', 
     'Output path for the tfrecord files.')
+flags.DEFINE_integer(
+    'random_audio_seed', None,
+    'Random seed int >= 0, to create random audio features. Uses normal audio if not passed.',
+    lower_bound=0)
 
 RNG = np.random.RandomState(42)
 
@@ -115,6 +119,10 @@ def cache_audio_features(seq_names):
         audio_feature = np.concatenate([
             envelope[:, None], mfcc, chroma, peak_onehot[:, None], beat_onehot[:, None]
         ], axis=-1)
+
+        if FLAGS.random_audio_seed is not None:
+            audio_rng = np.random.default_rng(seed=FLAGS.random_audio_seed)
+            audio_feature = audio_rng.uniform(np.min(audio_feature) * 5, np.max(audio_feature) * 5, audio_feature.shape)
         np.save(save_path, audio_feature)
 
 
