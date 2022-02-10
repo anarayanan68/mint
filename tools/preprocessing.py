@@ -126,6 +126,19 @@ def cache_audio_features(seq_names):
         np.save(save_path, audio_feature)
 
 
+def compute_SMPL_motion(seq_name, motion_dir):
+    smpl_poses, smpl_scaling, smpl_trans = AISTDataset.load_motion(motion_dir, seq_name)
+    smpl_trans /= smpl_scaling
+    smpl_poses = R.from_rotvec(
+        smpl_poses.reshape(-1, 3)).as_matrix().reshape(smpl_poses.shape[0], -1)
+    smpl_motion = np.concatenate([smpl_trans, smpl_poses], axis=-1)
+    return smpl_motion
+
+
+def get_motion_encoding(smpl_motion):
+    return smpl_motion
+
+
 def main(_):
     os.makedirs(os.path.dirname(FLAGS.tfrecord_path), exist_ok=True)
     tfrecord_writers = create_tfrecord_writers(
@@ -161,12 +174,7 @@ def main(_):
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
-        smpl_poses, smpl_scaling, smpl_trans = AISTDataset.load_motion(
-            dataset.motion_dir, seq_name)
-        smpl_trans /= smpl_scaling
-        smpl_poses = R.from_rotvec(
-            smpl_poses.reshape(-1, 3)).as_matrix().reshape(smpl_poses.shape[0], -1)
-        smpl_motion = np.concatenate([smpl_trans, smpl_poses], axis=-1)
+        smpl_motion = get_motion_encoding(compute_SMPL_motion(seq_name, dataset.motion_dir))
         audio, audio_name = load_cached_audio_features(seq_name)
 
         tfexample = to_tfexample(smpl_motion, audio, seq_name, audio_name)
@@ -178,12 +186,7 @@ def main(_):
         for i, seq_name in enumerate(seq_names * 10):
             logging.info("processing %d / %d" % (i + 1, n_samples * 10))
 
-            smpl_poses, smpl_scaling, smpl_trans = AISTDataset.load_motion(
-                dataset.motion_dir, seq_name)
-            smpl_trans /= smpl_scaling
-            smpl_poses = R.from_rotvec(
-                smpl_poses.reshape(-1, 3)).as_matrix().reshape(smpl_poses.shape[0], -1)
-            smpl_motion = np.concatenate([smpl_trans, smpl_poses], axis=-1)
+            smpl_motion = get_motion_encoding(compute_SMPL_motion(seq_name, dataset.motion_dir))
             audio, audio_name = load_cached_audio_features(random.choice(seq_names))
 
             tfexample = to_tfexample(smpl_motion, audio, seq_name, audio_name)
