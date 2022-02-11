@@ -44,6 +44,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       metrics: A single `tf.keras.metrics.Metric` object, or a list of
         `tf.keras.metrics.Metric` objects.
       evaluator_options: An optional `orbit.StandardEvaluatorOptions` object.
+      output_dir: Folder to write output motions to. Motions won't be written if this is not given.
     """
 
     self.model = model
