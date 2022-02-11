@@ -40,6 +40,11 @@ flags.DEFINE_integer(
 flags.DEFINE_string(
     'enc_pkl_path', None,
     'Path to pkl file to load/save motion name encoding data (weights etc). Skips encoding if not passed.')
+flags.DEFINE_integer(
+    'subset_size', None,
+    'Int >= 1. If passed, sets the number of sequences (from the start) to actually use for tfrecords. '
+    'All videos are chosen if this is not passed or is higher than the dataset size.',
+    lower_bound=1)
 
 RNG = np.random.RandomState(42)
 
@@ -231,6 +236,7 @@ def main(_):
         os.path.join(FLAGS.anno_dir, "ignore_list.txt"), dtype=str
     ).tolist()
     seq_names = [name for name in seq_names if name not in ignore_list]
+    seq_names = seq_names[:FLAGS.subset_size]
 
     # create audio features
     if FLAGS.overwrite_audio_cache or not os.path.isdir(FLAGS.audio_cache_dir):
