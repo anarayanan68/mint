@@ -31,7 +31,8 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
                model,
                metrics,
                output_dir=None,
-               evaluator_options=None):
+               evaluator_options=None,
+               overfit_expt=False):
     """Initializes a `SingleTaskEvaluator` instance.
 
     If the `SingleTaskEvaluator` should run its model under a distribution
@@ -45,11 +46,13 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
         `tf.keras.metrics.Metric` objects.
       evaluator_options: An optional `orbit.StandardEvaluatorOptions` object.
       output_dir: Folder to write output motions to. Motions won't be written if this is not given.
+      overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
     """
 
     self.model = model
     self.metrics = metrics if isinstance(metrics, list) else [metrics]
     self.output_dir = output_dir
+    self.overfit_expt = overfit_expt
 
     # Capture the strategy from the containing scope.
     self.strategy = tf.distribute.get_strategy()
@@ -65,7 +68,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
   def eval_step(self, iterator):
     """One eval step. Called multiple times per eval loop by the superclass."""
 
-    def step_fn(inputs):
+    def step_fn_autoregressive(inputs):
       # [batch_size, steps, motion_feature_dimension]
       outputs = self.model.infer_auto_regressive(inputs, steps=1200)
       # [batch_size, motion_seq_length + steps, motion_feature_dimension]
@@ -85,9 +88,43 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       # calculate metrics
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
+    
+    def step_fn_direct(inputs):
+      # [batch_size, target_length, motion_feature_dimension]
+      outputs = self.model(inputs)
+      # [batch_size, motion_seq_length + target_length, motion_feature_dimension]
+      outputs = tf.concat([inputs["motion_input"], outputs], axis=1)
+      targets = tf.concat([inputs["motion_input"], inputs["target"]], axis=1)
+
+      batch_size = tf.shape(outputs)[0]
+      if self.output_dir is not None:
+        os.makedirs(self.output_dir, exist_ok=True)
+        # save each batch instance seperately
+        for i in range(batch_size):
+          output = outputs[i].numpy()
+          save_path = os.path.join(self.output_dir, "OUTPUT--%s_%s.npy" % (
+              inputs["motion_name"][i].numpy().decode("utf-8"),
+              inputs["audio_name"][i].numpy().decode("utf-8"),
+          ))
+          print ("Saving output to %s" % save_path)
+          np.save(save_path, output)
+
+          target = targets[i].numpy()
+          save_path = os.path.join(self.output_dir, "TARGET--%s_%s.npy" % (
+              inputs["motion_name"][i].numpy().decode("utf-8"),
+              inputs["audio_name"][i].numpy().decode("utf-8"),
+          ))
+          print ("Saving target to %s" % save_path)
+          np.save(save_path, target)
+      # calculate metrics
+      for metric in self.metrics:
+        metric.update_state(inputs, outputs)
       
     # This is needed to handle distributed computation.
-    self.strategy.run(step_fn, args=(next(iterator),))
+    self.strategy.run(
+      step_fn_direct if self.overfit_expt else step_fn_autoregressive,
+      args=(next(iterator),)
+    )
 
   def eval_end(self):
     """Actions to take once after an eval loop."""

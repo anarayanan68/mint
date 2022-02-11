@@ -59,7 +59,11 @@ def evaluate():
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
   metrics_ = model_.get_metrics(eval_config)
   evaluator = single_task_evaluator.SingleTaskEvaluator(
-      dataset, model=model_, metrics=metrics_, output_dir=FLAGS.output_dir)
+      dataset,
+      model=model_,
+      metrics=metrics_,
+      output_dir=FLAGS.output_dir,
+      overfit_expt=FLAGS.overfit_expt)
 
   controller = orbit.Controller(
       evaluator=evaluator,
