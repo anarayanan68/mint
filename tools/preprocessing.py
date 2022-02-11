@@ -7,6 +7,8 @@ import random
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import librosa
+import hashlib
+import pickle
 from aist_plusplus.loader import AISTDataset
 
 import tensorflow as tf
@@ -32,6 +34,9 @@ flags.DEFINE_integer(
     'random_audio_seed', None,
     'Random seed int >= 0, to create random audio features. Uses normal audio if not passed.',
     lower_bound=0)
+flags.DEFINE_string(
+    'enc_pkl_path', None,
+    'Path to pkl file to load/save motion name encoding data (weights etc). Skips encoding if not passed.')
 
 RNG = np.random.RandomState(42)
 
@@ -135,8 +140,69 @@ def compute_SMPL_motion(seq_name, motion_dir):
     return smpl_motion
 
 
-def get_motion_encoding(smpl_motion):
-    return smpl_motion
+def compute_hashed_name(seq_name):
+    hash_str = hashlib.sha1(seq_name.encode('utf-8')).hexdigest()
+    stride = 4
+    hash_np = np.array([
+        float(int(hash_str[i:i+stride], 16)) / 16**stride
+        for i in range(0, len(hash_str), stride)
+    ]).reshape((1, -1))
+    return hash_np
+
+
+def load_enc_pkl():
+    path = FLAGS.enc_pkl_path
+    res = None
+    if path is not None and os.path.exists(path):
+        with open(path, 'rb') as f:
+            res = pickle.load(f)
+    return res
+
+
+def cache_enc_pkl(sample_motion_seq, sample_seq_name):
+    enc_seq_len = 256
+    enc_shape = (enc_seq_len, sample_motion_seq.shape[-1])
+    flat_output_size = np.prod(enc_shape)
+
+    wt_seed = 101
+    wt_rng = np.random.default_rng(seed=wt_seed)
+
+    hash_np = compute_hashed_name(sample_seq_name)
+    input_size = hash_np.shape[-1]
+
+    hidden_size = 128
+    w1 = wt_rng.normal(size=(input_size, hidden_size))
+    b1 = wt_rng.normal(size=hidden_size)
+    w2 = wt_rng.normal(size=(hidden_size, flat_output_size))
+    b2 = wt_rng.normal(size=flat_output_size)
+
+    pkl_data = {
+        'w1': w1,
+        'b1': b1,
+        'w2': w2,
+        'b2': b2,
+        'enc_shape': enc_shape,
+        'wt_seed': wt_seed,
+        'input_size': input_size,
+        'hidden_size': hidden_size
+    }
+    with open(FLAGS.enc_pkl_path, 'wb') as f:
+        pickle.dump(pkl_data, f)
+
+
+def get_encoded_input(seq_name, enc_pkl_data):
+    hash_np = compute_hashed_name(seq_name)
+
+    w1 = enc_pkl_data['w1']
+    b1 = enc_pkl_data['b1']
+    w2 = enc_pkl_data['w2']
+    b2 = enc_pkl_data['b2']
+    enc_shape = enc_pkl_data['enc_shape']
+
+    z1 = hash_np @ w1 + b1
+    op = np.tanh(z1) @ w2 + b2
+
+    return op.reshape(enc_shape)
 
 
 def main(_):
@@ -171,13 +237,19 @@ def main(_):
     # load data
     dataset = AISTDataset(FLAGS.anno_dir)
     n_samples = len(seq_names)
+    enc_seq_Len = 256
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
-        smpl_motion = get_motion_encoding(compute_SMPL_motion(seq_name, dataset.motion_dir))
-        audio, audio_name = load_cached_audio_features(seq_name)
+        motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
+        if FLAGS.enc_pkl_path is not None:
+            if not os.path.exists(FLAGS.enc_pkl_path):
+                cache_enc_pkl(motion_seq, seq_name)
+            enc_pkl_data = load_enc_pkl()
+            motion_seq = get_encoded_input(motion_seq, enc_pkl_data)
+        audio_seq, audio_name = load_cached_audio_features(seq_name)
 
-        tfexample = to_tfexample(smpl_motion, audio, seq_name, audio_name)
+        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
         write_tfexample(tfrecord_writers, tfexample)
 
     # If testval, also test on un-paired data
@@ -186,10 +258,15 @@ def main(_):
         for i, seq_name in enumerate(seq_names * 10):
             logging.info("processing %d / %d" % (i + 1, n_samples * 10))
 
-            smpl_motion = get_motion_encoding(compute_SMPL_motion(seq_name, dataset.motion_dir))
-            audio, audio_name = load_cached_audio_features(random.choice(seq_names))
+            motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
+            if FLAGS.enc_pkl_path is not None:
+                if not os.path.exists(FLAGS.enc_pkl_path):
+                    cache_enc_pkl(motion_seq, seq_name)
+                enc_pkl_data = load_enc_pkl()
+                motion_seq = get_encoded_input(motion_seq, enc_pkl_data)
+            audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
-            tfexample = to_tfexample(smpl_motion, audio, seq_name, audio_name)
+            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
             write_tfexample(tfrecord_writers, tfexample)
     
     close_tfrecord_writers(tfrecord_writers)
