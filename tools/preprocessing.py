@@ -24,6 +24,9 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     'audio_cache_dir', './data/aist_audio_feats/', 
     'Path to cache dictionary for audio features.')
+flags.DEFINE_bool(
+    'overwrite_audio_cache', False,
+    'Whether to overwite the audio cache if the directory already exists.')
 flags.DEFINE_enum(
     'split', 'train', ['train', 'testval'],
     'Whether do training set or testval set.')
@@ -230,14 +233,16 @@ def main(_):
     seq_names = [name for name in seq_names if name not in ignore_list]
 
     # create audio features
-    print ("Pre-compute audio features ...")
-    os.makedirs(FLAGS.audio_cache_dir, exist_ok=True)
-    cache_audio_features(seq_names)
+    if FLAGS.overwrite_audio_cache or not os.path.isdir(FLAGS.audio_cache_dir):
+        print("Pre-compute audio features ...")
+        os.makedirs(FLAGS.audio_cache_dir, exist_ok=True)
+        cache_audio_features(seq_names)
+    else:
+        print("Using existing audio cache.")
     
     # load data
     dataset = AISTDataset(FLAGS.anno_dir)
     n_samples = len(seq_names)
-    enc_seq_Len = 256
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
