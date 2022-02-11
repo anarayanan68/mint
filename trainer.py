@@ -44,6 +44,7 @@ flags.DEFINE_integer('warmup_steps', 1000,
                      'Number of learning rate warmup steps')
 flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
+flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 
 
 def _create_learning_rate(learning_rate_config):
@@ -105,7 +106,8 @@ def get_dataset_fn(configs):
     train_dataset_config = configs['train_dataset']
     use_tpu = (FLAGS.train_strategy == TRAIN_STRATEGY[0])
     dataset = inputs.create_input(
-        train_config, train_dataset_config, use_tpu=use_tpu)
+        train_config, train_dataset_config, use_tpu=use_tpu,
+        overfit_expt=FLAGS.overfit_expt)
     return dataset
 
   return dataset_fn

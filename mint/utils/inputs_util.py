@@ -56,7 +56,7 @@ def preprocess_labels(example, dataset_config):
   return example
 
 
-def fact_preprocessing(example, modality_to_params, is_training):
+def fact_preprocessing(example, modality_to_params, is_training, overfit_expt):
   """Preprocess data for FACT model."""
   motion_seq_length = tf.shape(example["motion_sequence"])[0]
   motion_input_length = modality_to_params["motion"]["input_length"]
@@ -71,7 +71,7 @@ def fact_preprocessing(example, modality_to_params, is_training):
   motion_dim += 6
   example["motion_sequence"] = tf.pad(example["motion_sequence"],
                                       [[0, 0], [6, 0]])
-  if is_training:
+  if is_training and not overfit_expt:
     windows_size = tf.maximum(motion_input_length,
                               motion_target_shift + motion_target_length)
     windows_size = tf.maximum(windows_size, audio_input_length)
@@ -96,7 +96,7 @@ def fact_preprocessing(example, modality_to_params, is_training):
     example["target"].set_shape([motion_target_length, motion_dim])
   del example["motion_sequence"]
 
-  if is_training:
+  if is_training or overfit_expt:
     # audio input: [start, start + audio_input_length)
     example["audio_input"] = example["audio_sequence"][start:start +
                                                       audio_input_length, :]

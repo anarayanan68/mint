@@ -21,7 +21,8 @@ def create_input(train_eval_config,
                  dataset_config,
                  num_cpu_threads=2,
                  is_training=True,
-                 use_tpu=False):
+                 use_tpu=False,
+                 overfit_expt=False):
   """Create batched input data.
 
   Args:
@@ -30,6 +31,7 @@ def create_input(train_eval_config,
     num_cpu_threads: Number of cpu threads for dataset reading.
     is_training: Whether this is training stage.
     use_tpu: Whether or not provide inputs for TPU.
+    overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
 
   Returns:
     ds: A tf.data.Dataset, with the following features:
@@ -103,7 +105,8 @@ def create_input(train_eval_config,
           functools.partial(
               inputs_util.fact_preprocessing,
               modality_to_params=modality_to_params,
-              is_training=is_training),
+              is_training=is_training,
+              overfit_expt=overfit_expt),
           num_parallel_calls=num_cpu_threads)
 
   if dataset_config.data_target_field:

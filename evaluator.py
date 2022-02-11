@@ -39,6 +39,7 @@ flags.DEFINE_float('initial_learning_rate', 0.1, 'UNUSED FLAG.')
 flags.DEFINE_float('weight_decay', None, 'UNUSED FLAG.')
 flags.DEFINE_string('head_initializer', 'he_normal',
                     'Initializer for prediction head.')
+flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 
 
 def evaluate():
@@ -51,7 +52,8 @@ def evaluate():
       train_eval_config=eval_config,
       dataset_config=eval_dataset_config,
       is_training=False,
-      use_tpu=False)
+      use_tpu=False,
+      overfit_expt=FLAGS.overfit_expt)
 
   model_ = model_builder.build(model_config, True)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
