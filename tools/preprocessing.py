@@ -257,7 +257,7 @@ def main(_):
             if not os.path.exists(FLAGS.enc_pkl_path):
                 cache_enc_pkl(motion_seq, seq_name)
             enc_pkl_data = load_enc_pkl()
-            motion_seq = get_encoded_input(motion_seq, enc_pkl_data)
+            motion_seq = get_encoded_input(seq_name, enc_pkl_data)
         audio_seq, audio_name = load_cached_audio_features(seq_name)
 
         tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
@@ -274,7 +274,7 @@ def main(_):
                 if not os.path.exists(FLAGS.enc_pkl_path):
                     cache_enc_pkl(motion_seq, seq_name)
                 enc_pkl_data = load_enc_pkl()
-                motion_seq = get_encoded_input(motion_seq, enc_pkl_data)
+                motion_seq = get_encoded_input(seq_name, enc_pkl_data)
             audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
             tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
