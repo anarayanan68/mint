@@ -87,7 +87,7 @@ def fact_preprocessing(example, modality_to_params, is_training, overfit_expt):
   example["motion_input"] = example["motion_sequence"][start:start +
                                                        motion_input_length, :]
   example["motion_input"].set_shape([motion_input_length, motion_dim])
-  if is_training:
+  if is_training or overfit_expt:
     # motion target: [start + shift, start + shift + motion_target_length)
     example["target"] = example["motion_sequence"][start +
                                                    motion_target_shift:start +
