@@ -40,6 +40,7 @@ flags.DEFINE_float('weight_decay', None, 'UNUSED FLAG.')
 flags.DEFINE_string('head_initializer', 'he_normal',
                     'Initializer for prediction head.')
 flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
+flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next checkpoint, as per tf.train.checkpoints_iterator. Pass a small value to run once and exit.')
 
 
 def evaluate():
@@ -74,7 +75,7 @@ def evaluate():
       eval_summary_dir=os.path.join(FLAGS.model_dir, FLAGS.eval_prefix),
       global_step=model_.global_step)
 
-  controller.evaluate_continuously(timeout=70000)
+  controller.evaluate_continuously(timeout=FLAGS.timeout_sec)
 
 
 def main(_):
