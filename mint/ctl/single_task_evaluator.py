@@ -91,7 +91,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
     
     def step_fn_direct(inputs):
       # [batch_size, target_length, motion_feature_dimension]
-      outputs = self.model(inputs)
+      outputs = self.model(inputs)[:, :inputs["target"].shape[1]]
       # [batch_size, motion_seq_length + target_length, motion_feature_dimension]
       outputs = tf.concat([inputs["motion_input"], outputs], axis=1)
       targets = tf.concat([inputs["motion_input"], inputs["target"]], axis=1)
