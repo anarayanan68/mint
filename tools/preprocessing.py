@@ -68,10 +68,15 @@ def write_tfexample(writers, tf_example):
     writers[random_writer_idx].write(tf_example.SerializeToString())
 
 
-def to_tfexample(motion_sequence, audio_sequence, motion_name, audio_name):
+def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_name_enc, audio_name):
     features = dict()
     features['motion_name'] = tf.train.Feature(
         bytes_list=tf.train.BytesList(value=[motion_name.encode('utf-8')]))
+
+    if motion_name_enc is not None:
+        features['motion_name_enc'] = tf.train.Feature(
+            float_list=tf.train.FloatList(value=motion_name_enc.flatten()))
+
     features['motion_sequence'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=motion_sequence.flatten()))
     features['motion_sequence_shape'] = tf.train.Feature(
@@ -249,18 +254,23 @@ def main(_):
     # load data
     dataset = AISTDataset(FLAGS.anno_dir)
     n_samples = len(seq_names)
+    enc_pkl_data = None
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
         motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
         if FLAGS.enc_pkl_path is not None:
-            if not os.path.exists(FLAGS.enc_pkl_path):
-                cache_enc_pkl(motion_seq, seq_name)
-            enc_pkl_data = load_enc_pkl()
-            motion_seq = get_encoded_input(seq_name, enc_pkl_data)
+            if enc_pkl_data is None:
+                if not os.path.exists(FLAGS.enc_pkl_path):
+                    cache_enc_pkl(motion_seq, seq_name)
+                enc_pkl_data = load_enc_pkl()
+
+            seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
+        else:
+            seq_name_enc = None
         audio_seq, audio_name = load_cached_audio_features(seq_name)
 
-        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
+        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
         write_tfexample(tfrecord_writers, tfexample)
 
     # If testval, also test on un-paired data
@@ -271,13 +281,17 @@ def main(_):
 
             motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
             if FLAGS.enc_pkl_path is not None:
-                if not os.path.exists(FLAGS.enc_pkl_path):
-                    cache_enc_pkl(motion_seq, seq_name)
-                enc_pkl_data = load_enc_pkl()
-                motion_seq = get_encoded_input(seq_name, enc_pkl_data)
+                if enc_pkl_data is None:
+                    if not os.path.exists(FLAGS.enc_pkl_path):
+                        cache_enc_pkl(motion_seq, seq_name)
+                    enc_pkl_data = load_enc_pkl()
+
+                seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
+            else:
+                seq_name_enc = None
             audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
-            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
+            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
             write_tfexample(tfrecord_writers, tfexample)
     
     close_tfrecord_writers(tfrecord_writers)
