@@ -101,12 +101,12 @@ def create_input(train_eval_config,
   for da_step_config in dataset_config.data_augmentation_options:
     da_step_type = da_step_config.WhichOneof("preprocessor")
     if da_step_type == "fact_preprocessor":
+      preproc_fn = inputs_util.fact_preprocessing_overfit if overfit_expt else inputs_util.fact_preprocessing
       ds = ds.map(
           functools.partial(
-              inputs_util.fact_preprocessing,
+              preproc_fn,
               modality_to_params=modality_to_params,
-              is_training=is_training,
-              overfit_expt=overfit_expt),
+              is_training=is_training),
           num_parallel_calls=num_cpu_threads)
 
   if dataset_config.data_target_field:
