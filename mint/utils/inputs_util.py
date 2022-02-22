@@ -125,7 +125,8 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
                                       [[0, 0], [6, 0]])
 
   start = 0
-  # motion input: [start, start + motion_input_length) but derived from encoding
+  # so-called "motion input": [start, start + motion_input_length) but derived from encoding
+  # key left unchanged for compatibility with model code
   example["motion_input"] = example["motion_name_enc"][start:start +
                                                        motion_input_length, :]
   example["motion_input"].set_shape([motion_input_length, motion_dim])
@@ -135,6 +136,11 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
                                                   motion_target_shift +
                                                   motion_target_length, :]
   example["target"].set_shape([motion_target_length, motion_dim])
+  # if not training, also pass the *actual* motion input, for concatenating to predicted/target outputs
+  if not is_training:
+    example["actual_motion_input"] = example["motion_sequence"][start:start +
+                                                                motion_input_length, :]
+    example["actual_motion_input"].set_shape([motion_input_length, motion_dim])
 
   del example["motion_sequence"]
   del example["motion_name_enc"]

@@ -89,12 +89,12 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
     
-    def step_fn_direct(inputs):
+    def step_fn_overfit(inputs):
       # [batch_size, target_length, motion_feature_dimension]
       outputs = self.model(inputs)[:, :inputs["target"].shape[1]]
       # [batch_size, motion_seq_length + target_length, motion_feature_dimension]
-      outputs = tf.concat([inputs["motion_input"], outputs], axis=1)
-      targets = tf.concat([inputs["motion_input"], inputs["target"]], axis=1)
+      outputs = tf.concat([inputs["actual_motion_input"], outputs], axis=1)
+      targets = tf.concat([inputs["actual_motion_input"], inputs["target"]], axis=1)
 
       batch_size = tf.shape(outputs)[0]
       if self.output_dir is not None:
@@ -122,7 +122,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       
     # This is needed to handle distributed computation.
     self.strategy.run(
-      step_fn_direct if self.overfit_expt else step_fn_autoregressive,
+      step_fn_overfit if self.overfit_expt else step_fn_autoregressive,
       args=(next(iterator),)
     )
 
