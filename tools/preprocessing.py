@@ -76,6 +76,8 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_name_enc, 
     if motion_name_enc is not None:
         features['motion_name_enc'] = tf.train.Feature(
             float_list=tf.train.FloatList(value=motion_name_enc.flatten()))
+        features['motion_name_enc_shape'] = tf.train.Feature(
+            int64_list=tf.train.Int64List(value=motion_name_enc.shape))
 
     features['motion_sequence'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=motion_sequence.flatten()))
