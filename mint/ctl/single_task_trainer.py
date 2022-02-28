@@ -15,6 +15,7 @@
 
 from absl import logging
 from third_party.tf_models import orbit
+from mint.core.losses import TVLoss
 import tensorflow as tf
 
 
@@ -66,7 +67,8 @@ class SingleTaskTrainer(orbit.StandardTrainer):
                metrics=None,
                trainer_options=None,
                summary_fn=None,
-               grad_clip_norm=0.):
+               grad_clip_norm=0.,
+               tvloss_weight=0.):
     """Initializes a `SingleTaskTrainer` instance.
 
     If the `SingleTaskTrainer` should run its model under a distribution
@@ -96,6 +98,7 @@ class SingleTaskTrainer(orbit.StandardTrainer):
       summary_fn: A function that adds tf.summary on model input and output
         tensors.
       grad_clip_norm: A float to clip the gradients by global norm.
+      tvloss_weight: A float to scale the TV loss value.
     """
     self.label_key = label_key
     self.model = model
@@ -112,8 +115,12 @@ class SingleTaskTrainer(orbit.StandardTrainer):
     self.task_loss = IdentityMetric('task_loss', tf.VariableAggregation.SUM)
     self.regularization_loss = IdentityMetric('regularization_loss',
                                               tf.VariableAggregation.SUM)
+    self.tv_loss = IdentityMetric('tv_loss',
+                                  tf.VariableAggregation.SUM)
     self.learning_rate = IdentityMetric(
         'learning_rate', tf.VariableAggregation.ONLY_FIRST_REPLICA)
+
+    self.tvloss_fn = TVLoss(weight=tvloss_weight)
 
     # We need self.metrics to be an iterable later, so we handle that here.
     if metrics is None:
@@ -131,6 +138,7 @@ class SingleTaskTrainer(orbit.StandardTrainer):
     self.train_loss.reset_states()
     self.task_loss.reset_states()
     self.regularization_loss.reset_states()
+    self.tv_loss.reset_states()
     self.learning_rate.reset_states()
     for metric in self.metrics:
       metric.reset_states()
@@ -164,12 +172,18 @@ class SingleTaskTrainer(orbit.StandardTrainer):
           regularization_loss = tf.add_n(self.model.losses)
         regularization_loss = (
             regularization_loss / self.strategy.num_replicas_in_sync)
-        total_loss = loss + regularization_loss
+
+        # TV loss
+        tv_loss = self.tvloss_fn(target, output)
+        tv_loss = tv_loss / self.strategy.num_replicas_in_sync
+
+        total_loss = loss + regularization_loss + tv_loss
 
         loss_dict = {
             'total_loss': total_loss,
             'loss:': loss,
             'reg_loss': regularization_loss,
+            'tv_loss': tv_loss,
         }
         if self.summary_fn:
           self.summary_fn(loss_dict, self.optimizer.iterations)
@@ -190,6 +204,7 @@ class SingleTaskTrainer(orbit.StandardTrainer):
         self.train_loss.update_state(total_loss)
         self.task_loss.update_state(loss)
         self.regularization_loss.update_state(regularization_loss)
+        self.tv_loss.update_state(tv_loss)
         self.learning_rate.update_state(
             self.optimizer.learning_rate(self.optimizer.iterations))
         for metric in self.metrics:
@@ -206,6 +221,7 @@ class SingleTaskTrainer(orbit.StandardTrainer):
       metrics[self.train_loss.name] = self.train_loss.result()
       metrics[self.task_loss.name] = self.task_loss.result()
       metrics[self.regularization_loss.name] = self.regularization_loss.result()
+      metrics[self.tv_loss.name] = self.tv_loss.result()
       metrics[self.learning_rate.name] = self.learning_rate.result()
 
     return metrics

@@ -45,6 +45,7 @@ flags.DEFINE_integer('warmup_steps', 1000,
 flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
 flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
+flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
 
 
 def _create_learning_rate(learning_rate_config):
@@ -161,7 +162,8 @@ def train():
         loss_fn=model_.loss,
         optimizer=optimizer,
         summary_fn=summaryfn,
-        grad_clip_norm=FLAGS.grad_clip_norm)
+        grad_clip_norm=FLAGS.grad_clip_norm,
+        tvloss_weight=FLAGS.tvloss_weight)
 
   controller = orbit.Controller(
       trainer=trainer,
