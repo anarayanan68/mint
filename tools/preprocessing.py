@@ -7,7 +7,6 @@ import random
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import librosa
-import hashlib
 import pickle
 from aist_plusplus.loader import AISTDataset
 
@@ -155,14 +154,15 @@ def compute_SMPL_motion(seq_name, motion_dir):
     return smpl_motion
 
 
-def compute_hashed_name(seq_name):
-    hash_str = hashlib.sha1(seq_name.encode('utf-8')).hexdigest()
-    stride = 4
-    hash_np = np.array([
-        float(int(hash_str[i:i+stride], 16)) / 16**stride
-        for i in range(0, len(hash_str), stride)
-    ]).reshape((1, -1))
-    return hash_np
+def get_onehot_enc_map(seq_names: list):
+    onehot_enc_map = {}
+    for i, seq_name in enumerate(seq_names):
+        enc = np.zeros(len(seq_names))
+        enc[i] = 1
+
+        onehot_enc_map[seq_name] = { 'index': i, 'enc': enc }
+
+    return onehot_enc_map
 
 
 def load_enc_pkl():
@@ -174,7 +174,12 @@ def load_enc_pkl():
     return res
 
 
-def cache_enc_pkl(sample_motion_seq, sample_seq_name):
+def cache_enc_pkl(dataset: AISTDataset, seq_names: list):
+    assert len(seq_names) > 0
+
+    sample_seq_name = seq_names[0]
+    sample_motion_seq = compute_SMPL_motion(sample_seq_name, dataset.motion_dir)
+
     enc_seq_len = 256
     enc_shape = (enc_seq_len, sample_motion_seq.shape[-1])
     flat_output_size = np.prod(enc_shape)
@@ -182,8 +187,8 @@ def cache_enc_pkl(sample_motion_seq, sample_seq_name):
     wt_seed = 101
     wt_rng = np.random.default_rng(seed=wt_seed)
 
-    hash_np = compute_hashed_name(sample_seq_name)
-    input_size = hash_np.shape[-1]
+    onehot_enc_map = get_onehot_enc_map(seq_names)
+    input_size = onehot_enc_map[sample_seq_name]['enc'].shape[-1]
 
     hidden_size = 128
     w1 = wt_rng.normal(size=(input_size, hidden_size))
@@ -192,6 +197,7 @@ def cache_enc_pkl(sample_motion_seq, sample_seq_name):
     b2 = wt_rng.normal(size=flat_output_size)
 
     pkl_data = {
+        'onehot_enc_map': onehot_enc_map,
         'w1': w1,
         'b1': b1,
         'w2': w2,
@@ -206,7 +212,10 @@ def cache_enc_pkl(sample_motion_seq, sample_seq_name):
 
 
 def get_encoded_input(seq_name, enc_pkl_data):
-    hash_np = compute_hashed_name(seq_name)
+    if enc_pkl_data is None:
+        return None
+
+    ip = enc_pkl_data['onehot_enc_map'][seq_name]['enc']
 
     w1 = enc_pkl_data['w1']
     b1 = enc_pkl_data['b1']
@@ -214,7 +223,7 @@ def get_encoded_input(seq_name, enc_pkl_data):
     b2 = enc_pkl_data['b2']
     enc_shape = enc_pkl_data['enc_shape']
 
-    z1 = hash_np @ w1 + b1
+    z1 = ip @ w1 + b1
     op = np.tanh(z1) @ w2 + b2
 
     return op.reshape(enc_shape)
@@ -256,20 +265,21 @@ def main(_):
     # load data
     dataset = AISTDataset(FLAGS.anno_dir)
     n_samples = len(seq_names)
+
     enc_pkl_data = None
+    if FLAGS.enc_pkl_path is not None:
+        if not os.path.exists(FLAGS.enc_pkl_path):
+            cache_enc_pkl(dataset, seq_names)
+            print(f"Cached encoding data at {FLAGS.enc_pkl_path}")
+        else:
+            print(f"Used existing encoding data at {FLAGS.enc_pkl_path}")
+        enc_pkl_data = load_enc_pkl()
+
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
         motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-        if FLAGS.enc_pkl_path is not None:
-            if enc_pkl_data is None:
-                if not os.path.exists(FLAGS.enc_pkl_path):
-                    cache_enc_pkl(motion_seq, seq_name)
-                enc_pkl_data = load_enc_pkl()
-
-            seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
-        else:
-            seq_name_enc = None
+        seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
         audio_seq, audio_name = load_cached_audio_features(seq_name)
 
         tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
@@ -282,15 +292,7 @@ def main(_):
             logging.info("processing %d / %d" % (i + 1, n_samples * 10))
 
             motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-            if FLAGS.enc_pkl_path is not None:
-                if enc_pkl_data is None:
-                    if not os.path.exists(FLAGS.enc_pkl_path):
-                        cache_enc_pkl(motion_seq, seq_name)
-                    enc_pkl_data = load_enc_pkl()
-
-                seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
-            else:
-                seq_name_enc = None
+            seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
             audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
             tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
