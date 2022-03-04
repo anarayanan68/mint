@@ -165,8 +165,7 @@ def get_onehot_enc_map(seq_names: list):
     return onehot_enc_map
 
 
-def load_enc_pkl():
-    path = FLAGS.enc_pkl_path
+def load_enc_pkl(path):
     res = None
     if path is not None and os.path.exists(path):
         with open(path, 'rb') as f:
@@ -211,22 +210,29 @@ def cache_enc_pkl(dataset: AISTDataset, seq_names: list):
         pickle.dump(pkl_data, f)
 
 
-def get_encoded_input(seq_name, enc_pkl_data):
-    if enc_pkl_data is None:
-        return None
+def get_latent_from_seq_name(seq_name, enc_pkl_data):
+    return enc_pkl_data['onehot_enc_map'][seq_name]['enc']
 
-    ip = enc_pkl_data['onehot_enc_map'][seq_name]['enc']
 
+def encode_latent_vector(vec, enc_pkl_data):
     w1 = enc_pkl_data['w1']
     b1 = enc_pkl_data['b1']
     w2 = enc_pkl_data['w2']
     b2 = enc_pkl_data['b2']
     enc_shape = enc_pkl_data['enc_shape']
 
-    z1 = ip @ w1 + b1
+    z1 = vec @ w1 + b1
     op = np.tanh(z1) @ w2 + b2
 
     return op.reshape(enc_shape)
+
+
+def get_encoded_input(seq_name, enc_pkl_data):
+    if enc_pkl_data is None:
+        return None
+
+    ip = get_latent_from_seq_name(seq_name, enc_pkl_data)
+    return encode_latent_vector(ip, enc_pkl_data)    
 
 
 def main(_):
@@ -273,7 +279,7 @@ def main(_):
             print(f"Cached encoding data at {FLAGS.enc_pkl_path}")
         else:
             print(f"Used existing encoding data at {FLAGS.enc_pkl_path}")
-        enc_pkl_data = load_enc_pkl()
+        enc_pkl_data = load_enc_pkl(FLAGS.enc_pkl_path)
 
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
