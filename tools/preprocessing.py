@@ -75,8 +75,6 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_name_enc, 
     if motion_name_enc is not None:
         features['motion_name_enc'] = tf.train.Feature(
             float_list=tf.train.FloatList(value=motion_name_enc.flatten()))
-        features['motion_name_enc_shape'] = tf.train.Feature(
-            int64_list=tf.train.Int64List(value=motion_name_enc.shape))
 
     features['motion_sequence'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=motion_sequence.flatten()))
@@ -155,7 +153,7 @@ def compute_SMPL_motion(seq_name, motion_dir):
 
 
 def get_onehot_enc_map(seq_names: list):
-    onehot_enc_map = {}
+    onehot_enc_map = { 'len': len(seq_names) }
     for i, seq_name in enumerate(seq_names):
         enc = np.zeros(len(seq_names))
         enc[i] = 1
@@ -165,48 +163,23 @@ def get_onehot_enc_map(seq_names: list):
     return onehot_enc_map
 
 
-def load_enc_pkl(path):
+def load_enc_pkl(pkl_path):
     res = None
-    if path is not None and os.path.exists(path):
-        with open(path, 'rb') as f:
+    if pkl_path is not None and os.path.exists(pkl_path):
+        with open(pkl_path, 'rb') as f:
             res = pickle.load(f)
     return res
 
 
-def cache_enc_pkl(dataset: AISTDataset, seq_names: list):
+def cache_enc_pkl(pkl_path: str, seq_names: list):
     assert len(seq_names) > 0
 
-    sample_seq_name = seq_names[0]
-    sample_motion_seq = compute_SMPL_motion(sample_seq_name, dataset.motion_dir)
-
-    enc_seq_len = 256
-    enc_shape = (enc_seq_len, sample_motion_seq.shape[-1])
-    flat_output_size = np.prod(enc_shape)
-
-    wt_seed = 101
-    wt_rng = np.random.default_rng(seed=wt_seed)
-
     onehot_enc_map = get_onehot_enc_map(seq_names)
-    input_size = onehot_enc_map[sample_seq_name]['enc'].shape[-1]
-
-    hidden_size = 128
-    w1 = wt_rng.normal(size=(input_size, hidden_size))
-    b1 = wt_rng.normal(size=hidden_size)
-    w2 = wt_rng.normal(size=(hidden_size, flat_output_size))
-    b2 = wt_rng.normal(size=flat_output_size)
 
     pkl_data = {
         'onehot_enc_map': onehot_enc_map,
-        'w1': w1,
-        'b1': b1,
-        'w2': w2,
-        'b2': b2,
-        'enc_shape': enc_shape,
-        'wt_seed': wt_seed,
-        'input_size': input_size,
-        'hidden_size': hidden_size
     }
-    with open(FLAGS.enc_pkl_path, 'wb') as f:
+    with open(pkl_path, 'wb') as f:
         pickle.dump(pkl_data, f)
 
 
@@ -214,25 +187,11 @@ def get_latent_from_seq_name(seq_name, enc_pkl_data):
     return enc_pkl_data['onehot_enc_map'][seq_name]['enc']
 
 
-def encode_latent_vector(vec, enc_pkl_data):
-    w1 = enc_pkl_data['w1']
-    b1 = enc_pkl_data['b1']
-    w2 = enc_pkl_data['w2']
-    b2 = enc_pkl_data['b2']
-    enc_shape = enc_pkl_data['enc_shape']
-
-    z1 = vec @ w1 + b1
-    op = np.tanh(z1) @ w2 + b2
-
-    return op.reshape(enc_shape)
-
-
 def get_encoded_input(seq_name, enc_pkl_data):
     if enc_pkl_data is None:
         return None
 
-    ip = get_latent_from_seq_name(seq_name, enc_pkl_data)
-    return encode_latent_vector(ip, enc_pkl_data)    
+    return get_latent_from_seq_name(seq_name, enc_pkl_data)
 
 
 def main(_):
@@ -275,7 +234,7 @@ def main(_):
     enc_pkl_data = None
     if FLAGS.enc_pkl_path is not None:
         if not os.path.exists(FLAGS.enc_pkl_path):
-            cache_enc_pkl(dataset, seq_names)
+            cache_enc_pkl(FLAGS.enc_pkl_path, seq_names)
             print(f"Cached encoding data at {FLAGS.enc_pkl_path}")
         else:
             print(f"Used existing encoding data at {FLAGS.enc_pkl_path}")
