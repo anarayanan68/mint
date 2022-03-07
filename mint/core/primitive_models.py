@@ -35,10 +35,10 @@ class Vec2SeqEncoder(keras.Model):
 
 
 class NameFACTJointModel(keras.Model):
-    def __init__(self, fact_config, encoder_config_yaml, name="NameFACTJointModel", **kwargs):
+    def __init__(self, fact_config, is_training, encoder_config_yaml, name="NameFACTJointModel", **kwargs):
         super(NameFACTJointModel, self).__init__(name=name, **kwargs)
 
-        self.fact_stage = fact_model.FACTModel(fact_config, kwargs.pop('is_training', False))
+        self.fact_stage = fact_model.FACTModel(fact_config, is_training)
         self.name_enc_stage = Vec2SeqEncoder(
             input_dim=encoder_config_yaml['input_dim'],
             hidden_size=encoder_config_yaml['hidden_size'],
