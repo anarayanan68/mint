@@ -61,14 +61,15 @@ class NameFACTJointModel(keras.Model):
         # Pad the encoding corresp. to input motion translation from 3-dim to 9-dim
         motion_dim += 6
         inputs["motion_name_enc_seq"] = tf.pad(inputs["motion_name_enc_seq"],
-                                                [[0, 0], [6, 0]])
+                                                [[0, 0], [0, 0], [6, 0]])
 
         start = 0
         # so-called "motion input": [start, start + motion_input_length) but derived from encoding
         # key left unchanged for compatibility with model code
-        inputs["motion_input"] = inputs["motion_name_enc_seq"][start:start +
+        inputs["motion_input"] = inputs["motion_name_enc_seq"][:,
+                                                                start:start +
                                                                 motion_input_length, :]
-        inputs["motion_input"].set_shape([motion_input_length, motion_dim])
+        inputs["motion_input"].set_shape([inputs["motion_input"].shape[0], motion_input_length, motion_dim])
 
         del inputs["motion_name_enc_seq"]
 
