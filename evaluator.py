@@ -41,11 +41,15 @@ flags.DEFINE_string('head_initializer', 'he_normal',
                     'Initializer for prediction head.')
 flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next checkpoint, as per tf.train.checkpoints_iterator. Pass a small value to run once and exit.')
+flags.DEFINE_string('name_enc_cfg_yaml_path', None,
+                    'Path to YAML config file for the name encoder network.')
 
 
 def evaluate():
   """Evaluates the given model."""
   configs = config_util.get_configs_from_pipeline_file(FLAGS.config_path)
+  name_enc_config_yaml = config_util.read_yaml_config(FLAGS.name_enc_cfg_yaml_path) # None case handled here
+
   model_config = configs['model']
   eval_config = configs['eval_config']
   eval_dataset_config = configs['eval_dataset']
@@ -56,7 +60,7 @@ def evaluate():
       use_tpu=False,
       overfit_expt=FLAGS.overfit_expt)
 
-  model_ = model_builder.build(model_config, True)
+  model_ = model_builder.build(model_config, True, name_encoder_config_yaml=name_enc_config_yaml, dataset_config=eval_dataset_config)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
   metrics_ = model_.get_metrics(eval_config)
   evaluator = single_task_evaluator.SingleTaskEvaluator(
