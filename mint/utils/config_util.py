@@ -18,6 +18,8 @@ from mint.protos import pipeline_pb2
 import tensorflow as tf
 from tensorflow.python.lib.io import file_io
 
+import yaml
+
 
 def get_configs_from_pipeline_file(pipeline_config_path, config_override=None):
   """Reads configuration from a pipeline_pb2.TrainEvalPipelineConfig.
@@ -87,3 +89,11 @@ def save_pipeline_config(pipeline_config, directory):
   with tf.io.gfile.Open(pipeline_config_path, 'wb') as f:
     tf.logging.info('Writing pipeline config file to %s', pipeline_config_path)
     f.write(config_text)
+
+
+def read_yaml_config(yaml_config_path):
+  if yaml_config_path is None:
+    return None
+  with open(yaml_config_path, 'r') as yml_file:
+    cfg = yaml.load(yml_file, Loader=yaml.FullLoader)
+  return cfg

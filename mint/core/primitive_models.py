@@ -44,11 +44,14 @@ class NameFACTJointModel(keras.Model):
         self.name_enc_stage = Vec2SeqEncoder(
             input_dim=encoder_config_yaml['input_dim'],
             hidden_size=encoder_config_yaml['hidden_size'],
-            target_shape=encoder_config_yaml['target_shape'],
+            target_shape=tuple((int(x) for x in encoder_config_yaml['target_shape'].split(','))),
             wt_seed=encoder_config_yaml['wt_seed'],
         )
 
         self.modality_to_params = inputs_util.get_modality_to_param_dict(dataset_config)
+
+        self.loss = self.fact_stage.loss
+        self.get_metrics = self.fact_stage.get_metrics
 
 
     def middle_processing(self, inputs):
