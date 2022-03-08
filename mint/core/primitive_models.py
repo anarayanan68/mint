@@ -1,11 +1,13 @@
 """Models used for motion primitive experiments."""
 
+import imp
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
 from mint.core import fact_model
+from mint.utils import inputs_util
 
 
 class Vec2SeqEncoder(keras.Model):
@@ -35,7 +37,7 @@ class Vec2SeqEncoder(keras.Model):
 
 
 class NameFACTJointModel(keras.Model):
-    def __init__(self, fact_config, is_training, encoder_config_yaml, name="NameFACTJointModel", **kwargs):
+    def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="NameFACTJointModel", **kwargs):
         super(NameFACTJointModel, self).__init__(name=name, **kwargs)
 
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)
@@ -46,9 +48,32 @@ class NameFACTJointModel(keras.Model):
             wt_seed=encoder_config_yaml['wt_seed'],
         )
 
+        self.modality_to_params = inputs_util.get_modality_to_param_dict(dataset_config)
+
+
+    def middle_processing(self, inputs):
+        motion_input_length = self.modality_to_params["motion"]["input_length"]
+        motion_dim = self.modality_to_params["motion"]["feature_dim"]
+
+        # Pad the encoding corresp. to input motion translation from 3-dim to 9-dim
+        motion_dim += 6
+        inputs["motion_name_enc_seq"] = tf.pad(inputs["motion_name_enc_seq"],
+                                                [[0, 0], [6, 0]])
+
+        start = 0
+        # so-called "motion input": [start, start + motion_input_length) but derived from encoding
+        # key left unchanged for compatibility with model code
+        inputs["motion_input"] = inputs["motion_name_enc_seq"][start:start +
+                                                                motion_input_length, :]
+        inputs["motion_input"].set_shape([motion_input_length, motion_dim])
+
+        del inputs["motion_name_enc_seq"]
+
+
     def call(self, inputs):
         vec = inputs['motion_name_enc']
         seq = self.name_enc_stage(vec)
-
         inputs['motion_name_enc_seq'] = seq
+
+        self.middle_processing(inputs)
         return self.fact_stage(inputs)

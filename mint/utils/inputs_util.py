@@ -121,15 +121,8 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
   motion_dim += 6
   example["motion_sequence"] = tf.pad(example["motion_sequence"],
                                       [[0, 0], [6, 0]])
-  example["motion_name_enc"] = tf.pad(example["motion_name_enc"],
-                                      [[0, 0], [6, 0]])
 
   start = 0
-  # so-called "motion input": [start, start + motion_input_length) but derived from encoding
-  # key left unchanged for compatibility with model code
-  example["motion_input"] = example["motion_name_enc"][start:start +
-                                                       motion_input_length, :]
-  example["motion_input"].set_shape([motion_input_length, motion_dim])
   # motion target: [start + shift, start + shift + motion_target_length) derived from the actual motion seq
   example["target"] = example["motion_sequence"][start +
                                                   motion_target_shift:start +
@@ -143,7 +136,6 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
     example["actual_motion_input"].set_shape([motion_input_length, motion_dim])
 
   del example["motion_sequence"]
-  del example["motion_name_enc"]
 
   # audio input: [start, start + audio_input_length)
   example["audio_input"] = example["audio_sequence"][start:start +
