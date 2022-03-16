@@ -12,6 +12,8 @@ from aist_plusplus.loader import AISTDataset
 
 import tensorflow as tf
 
+from conversion_util import matrix_to_rotation_6d
+
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -146,8 +148,11 @@ def cache_audio_features(seq_names):
 def compute_SMPL_motion(seq_name, motion_dir):
     smpl_poses, smpl_scaling, smpl_trans = AISTDataset.load_motion(motion_dir, seq_name)
     smpl_trans /= smpl_scaling
-    smpl_poses = R.from_rotvec(
-        smpl_poses.reshape(-1, 3)).as_matrix().reshape(smpl_poses.shape[0], -1)
+
+    num_frames = smpl_poses.shape[0]
+    smpl_poses = R.from_rotvec(smpl_poses.reshape((-1, 3))).as_matrix().reshape((num_frames, -1, 3, 3))
+    smpl_poses = matrix_to_rotation_6d(smpl_poses).reshape((num_frames, -1))
+
     smpl_motion = np.concatenate([smpl_trans, smpl_poses], axis=-1)
     return smpl_motion
 
