@@ -12,7 +12,7 @@ from aist_plusplus.loader import AISTDataset
 
 import tensorflow as tf
 
-from conversion_util import matrix_to_rotation_6d
+from .conversion_util import matrix_to_rotation_6d
 
 
 FLAGS = flags.FLAGS

@@ -8,8 +8,10 @@ import numpy as np
 from smplx import SMPL
 from scipy.spatial.transform import Rotation as R
 from typing import Tuple
+from tqdm import tqdm
 
 from conversion_util import rotation_6d_to_matrix
+
 
 # %%
 # settings
@@ -21,10 +23,8 @@ out_fps = 10
 
 # %%
 
-
 def recover_to_axis_angles(motion: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     batch_size, seq_len, dim = motion.shape
-    assert dim == 225
     transl = motion[:, :, 6:9]
     rot_6D = motion[:, :, 9:].reshape(batch_size, seq_len, -1, 6)
     rotmats = rotation_6d_to_matrix(rot_6D)
@@ -52,7 +52,7 @@ def visualize(motion: np.ndarray, smpl_model: SMPL, vedo_video: vedo.io.Video) -
     )
     world = vedo.Box(bbox_center, bbox_size[0], bbox_size[1], bbox_size[2]).wireframe()
     plotter = vedo.show(world, axes=True, viewup="y", interactive=False)
-    for kpts in keypoints3d:
+    for kpts in tqdm(keypoints3d):
         pts = vedo.Points(kpts).c("red")
         plotter = vedo.show(world, pts)
 
@@ -81,7 +81,7 @@ result_motion = result_motion[:, :num_frames]
 result_motion.shape, result_motion
 
 # %%
-# for some reason, output window is not shown, so saving directly
+# for some reason, output window is not shown sometimes
 out_vid = vedo.io.Video(out_vid_path, fps=out_fps, duration=None, backend='ffmpeg')
 visualize(result_motion, smpl, out_vid)
 out_vid.close()
