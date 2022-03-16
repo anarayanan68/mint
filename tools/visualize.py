@@ -24,6 +24,7 @@ import torch
 import time
 import numpy as np
 import random
+import re
 from scipy.spatial.transform import Rotation as R
 from scipy import linalg
 from docopt import docopt
@@ -37,7 +38,6 @@ from conversion_util import rotation_6d_to_matrix
 
 def recover_to_axis_angles(motion: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     batch_size, seq_len, dim = motion.shape
-    assert dim == 225
     transl = motion[:, :, 6:9]
     rot_6D = motion[:, :, 9:].reshape(batch_size, seq_len, -1, 6)
     rotmats = rotation_6d_to_matrix(rot_6D)
@@ -115,6 +115,7 @@ if __name__ == "__main__":
         result_files = result_files[:int(args['--num_files'])]
 
     signal.signal(signal.SIGINT, handler_sigint)
+    match_obj = re.compile(r'.*(g\w+_s\w+_cAll_d\w+_m\w+_ch\w+)_(m\w+).*')
 
     for result_file in tqdm.tqdm(result_files):
         result_motion = np.load(result_file)[None, ...]  # [1, 120 + 1200, 225]
@@ -123,12 +124,14 @@ if __name__ == "__main__":
         SR = FPS * HOP_LENGTH
         
         base_name = os.path.splitext(os.path.basename(result_file))[0]
-        split_idx = base_name.rfind('_')
-        vid_name, aud_name = base_name[:split_idx], base_name[split_idx+1:]
+        match_res = match_obj.match(base_name)
+        vid_name, aud_name = match_res.group(1), match_res.group(2)
         vid_name = vid_name.replace('_cAll', '_c01')
         vid_file = vid_name + ".mp4"
         aud_file = aud_name + ".wav"
-        aud_file_matched = aud_name + "_matched.wav"
+
+        trunc_nframes = result_motion.shape[1]
+        aud_file_matched = f"{aud_name}__{trunc_nframes}_frames.wav"
 
         if os.path.exists(os.path.join(video_dir, vid_file)):
             print(f"Video {vid_file} already synced.")
@@ -156,7 +159,6 @@ if __name__ == "__main__":
         else:
             print(f"Matching audio to fit video, saving to {aud_file_matched}")
             audio_data, _ = sf.read(aud_file)       # `audio_data` has length = no. of total samples
-            trunc_nframes = result_motion.shape[1]
             audio_data_trunc = audio_data[:trunc_nframes * HOP_LENGTH]  # keep only `trunc_nframes` frames, at `HOP_LENGTH` samples/frame
             sf.write(aud_file_matched, audio_data_trunc, samplerate=SR)
             print('Done.')
