@@ -143,6 +143,15 @@ class FACTModel(multi_modal_model.MultiModalModel):
   def compute_motion_generation_loss(self, pred_tensors, target_tensors):
     """Compute motion generation loss from layer output."""
     _, target_seq_len, _ = base_model_util.get_shape_list(target_tensors)
+
+    ## Previous: L2 loss
+    # diff = target_tensors - pred_tensors[:, :target_seq_len]
+    # l2_loss = tf.reduce_mean(tf.square(diff))
+    # return l2_loss
+
+    ## Current: Pseudo-Huber (smooth) loss
+    ## from https://en.wikipedia.org/wiki/Huber_loss#Pseudo-Huber_loss_function
     diff = target_tensors - pred_tensors[:, :target_seq_len]
-    l2_loss = tf.reduce_mean(tf.square(diff))
-    return l2_loss
+    delta = 1.0
+    smooth_huber_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1)
+    return smooth_huber_loss
