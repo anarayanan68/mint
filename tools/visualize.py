@@ -38,8 +38,8 @@ from conversion_util import rotation_6d_to_matrix
 
 def recover_to_axis_angles(motion: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     batch_size, seq_len, dim = motion.shape
-    transl = motion[:, :, 6:9]
-    rot_6D = motion[:, :, 9:].reshape(batch_size, seq_len, -1, 6)
+    transl = motion[:, :, :3]
+    rot_6D = motion[:, :, 3:].reshape(batch_size, seq_len, -1, 6)
     rotmats = rotation_6d_to_matrix(rot_6D)
     axis_angles = R.from_matrix(rotmats.reshape(-1,3,3)).as_rotvec().reshape(batch_size, seq_len, -1, 3)
     return axis_angles, transl

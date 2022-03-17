@@ -117,11 +117,6 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
   motion_dim = modality_to_params["motion"]["feature_dim"]
   audio_dim = modality_to_params["audio"]["feature_dim"]
 
-  # Pad the input motion translation from 3-dim to 9-dim, and correspondingly pad the encoding.
-  motion_dim += 6
-  example["motion_sequence"] = tf.pad(example["motion_sequence"],
-                                      [[0, 0], [6, 0]])
-
   start = 0
   # motion target: [start + shift, start + shift + motion_target_length) derived from the actual motion seq
   example["target"] = example["motion_sequence"][start +
