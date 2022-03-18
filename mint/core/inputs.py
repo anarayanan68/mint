@@ -123,7 +123,8 @@ def create_input(train_eval_config,
         num_parallel_calls=num_cpu_threads)
 
   # Convert dataset from clip-based to latent-based
-  latents = tf.convert_to_tensor(enc_pkl_data['generated_latents'])
+  latents = tf.convert_to_tensor(enc_pkl_data['generated_latents'], dtype=tf.float32)
+  # -> dtype used explicitly to match target sequence dtype (as specified in `name_to_features`)
   ds = inputs_util.compute_latent_based_dataset(ds, latents, num_parallel_calls=num_cpu_threads)
 
   if is_training:

@@ -77,7 +77,7 @@ class NameFACTJointModel(keras.Model):
         return self.fact_stage(inputs)
 
 
-    def loss(self, pred_tensors, target_tensors, inputs):
+    def loss(self, target_tensors, pred_tensors, inputs):
         _, _, target_seq_len, _ = base_model_util.get_shape_list(target_tensors)
 
         ## Pseudo-Huber (smooth) loss per latent, *blended over all clips*

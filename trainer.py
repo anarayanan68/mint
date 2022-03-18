@@ -102,10 +102,10 @@ def _create_learning_rate(learning_rate_config):
   return lr_schedule
 
 
-def get_dataset_fn(configs):
+def get_dataset_fn(configs, enc_pkl_data=None):
   """Returns tf dataset."""
 
-  def dataset_fn(input_context=None, enc_pkl_data=None):
+  def dataset_fn(input_context=None):
     del input_context
     train_config = configs['train_config']
     train_dataset_config = configs['train_dataset']

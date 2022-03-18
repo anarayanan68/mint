@@ -143,12 +143,19 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
   # Extract relevant data from clip based dataset
   sample_data = next(iter(clip_based_ds))
   audio_input = tf.zeros_like(sample_data["audio_input"]) # zero out all audio - another way to "remove" audio input
-  targets = [None] * len(clip_based_ds)
+
+  targets = [None] * sample_data["motion_name_enc"].shape[-1]
+  num_found = 0
+  num_to_find = len(targets)
+
   for example in clip_based_ds:
     enc = example["motion_name_enc"]
     idx = tf.argmax(enc)  # find the single "hot" index
-    assert targets[idx] is None
-    targets[idx] = example["target"]
+    if targets[idx] is None:
+      targets[idx] = example["target"]
+      num_found += 1
+      if num_found == num_to_find:
+        break
   targets = tf.stack(targets)
 
   latent_based_ds = tf.data.Dataset.from_tensor_slices(latents)
