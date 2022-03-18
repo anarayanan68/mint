@@ -162,7 +162,7 @@ class SingleTaskTrainer(orbit.StandardTrainer):
         # replicas. This ensures that we don't end up multiplying our loss by
         # the number of workers - gradients are summed, not averaged, across
         # replicas during the apply_gradients call.
-        loss = tf.reduce_mean(self.loss_fn(target, output))
+        loss = tf.reduce_mean(self.loss_fn(target, output, inputs))
         loss = loss / self.strategy.num_replicas_in_sync
 
         # Since we don't use compile/fit api for training, the only losses added

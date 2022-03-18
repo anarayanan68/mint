@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from mint.core import fact_model
+from mint.core import fact_model, base_model_util
 from mint.utils import inputs_util
 
 
@@ -50,7 +50,6 @@ class NameFACTJointModel(keras.Model):
 
         self.modality_to_params = inputs_util.get_modality_to_param_dict(dataset_config)
 
-        self.loss = self.fact_stage.loss
         self.get_metrics = self.fact_stage.get_metrics
 
 
@@ -76,3 +75,25 @@ class NameFACTJointModel(keras.Model):
 
         self.middle_processing(inputs)
         return self.fact_stage(inputs)
+
+
+    def loss(self, pred_tensors, target_tensors, inputs):
+        _, _, target_seq_len, _ = base_model_util.get_shape_list(target_tensors)
+
+        ## Pseudo-Huber (smooth) loss per latent, *blended over all clips*
+        ##    -> Pseudo-Huber loss from https://en.wikipedia.org/wiki/Huber_loss#Pseudo-Huber_loss_function
+        #
+        # targets shape (batch_size, latent_dim, target_seq_len, feature_dim)
+        # preds shape   (batch_size, pred_seq_len, feature_dim)
+        #     -> will be sliced to match sequence lengths, and broadcasted to align with targets
+        #
+        # also use input latents of shape (batch_size, latent_dim) to weigh the losses w.r.t each target
+        in_latents = inputs["motion_name_enc"]
+        diff = target_tensors - pred_tensors[:, None, :target_seq_len]
+
+        delta = 1.0
+        # Loss is first averaged over the sequence and feature dimensions
+        smooth_huber_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1, axis=[-1,-2])
+        # -> now of shape (batch_size, latent_dim), need to weight and sum over latent dim and then average over batch dim
+        blended_loss = tf.reduce_mean(tf.reduce_sum(smooth_huber_loss * in_latents, axis=-1))
+        return blended_loss
