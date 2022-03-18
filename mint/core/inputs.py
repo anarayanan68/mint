@@ -22,7 +22,8 @@ def create_input(train_eval_config,
                  num_cpu_threads=2,
                  is_training=True,
                  use_tpu=False,
-                 overfit_expt=False):
+                 overfit_expt=False,
+                 enc_pkl_data=None):
   """Create batched input data.
 
   Args:
@@ -32,6 +33,7 @@ def create_input(train_eval_config,
     is_training: Whether this is training stage.
     use_tpu: Whether or not provide inputs for TPU.
     overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
+    enc_pkl_data: Dict (read from PKL file) with generated latent vectors to use as input
 
   Returns:
     ds: A tf.data.Dataset, with the following features:
@@ -65,8 +67,8 @@ def create_input(train_eval_config,
         "motion_name_enc": tf.io.VarLenFeature(tf.float32),
     })
 
-  # For training, we want a lot of parallel reading and shuffling.
-  # For eval, we want no shuffling and parallel reading doesn't matter.
+  # For training, we want a lot of parallel reading.
+  # For eval, parallel reading doesn't matter.
   if is_training:
     ds = tf.data.Dataset.from_tensor_slices(tf.constant(data_files))
     ds = ds.interleave(
@@ -74,12 +76,8 @@ def create_input(train_eval_config,
         cycle_length=tf.data.AUTOTUNE,
         num_parallel_calls=tf.data.AUTOTUNE,
         deterministic=False)
-    ds = ds.shuffle(100).repeat()
   else:
     ds = tf.data.TFRecordDataset(data_files)
-    # Since we evaluate for a fixed number of steps we don't want to encounter
-    # out-of-range exceptions.
-    ds = ds.repeat(1)
 
   # Function to decode a record
   def _decode_and_reshape_record(record):
@@ -123,6 +121,18 @@ def create_input(train_eval_config,
         functools.partial(
             inputs_util.preprocess_labels, dataset_config=dataset_config),
         num_parallel_calls=num_cpu_threads)
+
+  # Convert dataset from clip-based to latent-based
+  latents = tf.convert_to_tensor(enc_pkl_data['generated_latents'])
+  ds = inputs_util.compute_latent_based_dataset(ds, latents, num_parallel_calls=num_cpu_threads)
+
+  if is_training:
+    # For training, we want shuffling; not so for eval.
+    ds = ds.shuffle(100).repeat()
+  else:
+    # Since we evaluate for a fixed number of steps we don't want to encounter
+    # out-of-range exceptions.
+    ds = ds.repeat(1)
 
   # We must `drop_remainder` on training because the TPU requires fixed
   # size dimensions.

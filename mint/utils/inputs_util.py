@@ -124,11 +124,6 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
                                                   motion_target_shift +
                                                   motion_target_length, :]
   example["target"].set_shape([motion_target_length, motion_dim])
-  # if not training, also pass the *actual* motion input, for concatenating to predicted/target outputs
-  if not is_training:
-    example["actual_motion_input"] = example["motion_sequence"][start:start +
-                                                                motion_input_length, :]
-    example["actual_motion_input"].set_shape([motion_input_length, motion_dim])
 
   del example["motion_sequence"]
 
@@ -140,3 +135,31 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
   del example["audio_sequence"]
 
   return example
+
+
+def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
+                                 latents: tf.Tensor,
+                                 num_parallel_calls: int = 2) -> tf.data.Dataset:
+  # Extract relevant data from clip based dataset
+  sample_data = next(iter(clip_based_ds))
+  audio_input = tf.zeros_like(sample_data["audio_input"]) # zero out all audio - another way to "remove" audio input
+  targets = [None] * len(clip_based_ds)
+  for example in clip_based_ds:
+    enc = example["motion_name_enc"]
+    idx = tf.argmax(enc)  # find the single "hot" index
+    assert targets[idx] is None
+    targets[idx] = example["target"]
+  targets = tf.stack(targets)
+
+  latent_based_ds = tf.data.Dataset.from_tensor_slices(latents)
+  latent_based_ds = latent_based_ds.map(
+    lambda latent: {
+      "motion_name_enc": latent,
+      "audio_input": audio_input,
+      "target": targets,  # retaining the key verbatim for compatibility with rest of pipeline (e.g. loss fns)
+    },
+    num_parallel_calls=num_parallel_calls
+  )
+
+  del clip_based_ds
+  return latent_based_ds

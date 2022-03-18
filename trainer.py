@@ -15,6 +15,7 @@
 
 from absl import app
 from absl import flags
+import pickle
 from mint.core import inputs
 from mint.core import learning_schedules
 from mint.core import model_builder
@@ -48,7 +49,8 @@ flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment
 flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
 flags.DEFINE_string('name_enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
-
+flags.DEFINE_string('enc_pkl_path', None,
+                    'Path to PKL file containing generated latent vectors.')
 
 def _create_learning_rate(learning_rate_config):
   """Create optimizer learning rate based on config.
@@ -103,14 +105,16 @@ def _create_learning_rate(learning_rate_config):
 def get_dataset_fn(configs):
   """Returns tf dataset."""
 
-  def dataset_fn(input_context=None):
+  def dataset_fn(input_context=None, enc_pkl_data=None):
     del input_context
     train_config = configs['train_config']
     train_dataset_config = configs['train_dataset']
     use_tpu = (FLAGS.train_strategy == TRAIN_STRATEGY[0])
     dataset = inputs.create_input(
-        train_config, train_dataset_config, use_tpu=use_tpu,
-        overfit_expt=FLAGS.overfit_expt)
+        train_config, train_dataset_config,
+        use_tpu=use_tpu,
+        overfit_expt=FLAGS.overfit_expt,
+        enc_pkl_data=enc_pkl_data)
     return dataset
 
   return dataset_fn
@@ -144,12 +148,14 @@ def train():
   """Trains model."""
   configs = config_util.get_configs_from_pipeline_file(FLAGS.config_path)
   name_enc_config_yaml = config_util.read_yaml_config(FLAGS.name_enc_cfg_yaml_path) # None case handled here
+  with open(FLAGS.enc_pkl_path, 'rb') as pf:
+    enc_pkl_data = pickle.load(pf)
 
   model_config = configs['model']
   train_config = configs['train_config']
 
   strategy = distribution_strategy()
-  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs))
+  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, enc_pkl_data))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
       name_encoder_config_yaml=name_enc_config_yaml, dataset_config=configs['train_dataset'])
