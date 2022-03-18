@@ -46,6 +46,10 @@ flags.DEFINE_integer(
     'Int >= 1. If passed, sets the number of sequences (from the start) to actually use for tfrecords. '
     'All videos are chosen if this is not passed or is higher than the dataset size.',
     lower_bound=1)
+flags.DEFINE_integer(
+    'random_latent_seed', None,
+    'Random seed int >= 0, to create random latents. No such latents generated if not passed.',
+    lower_bound=0)
 
 RNG = np.random.RandomState(42)
 
@@ -92,12 +96,12 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_name_enc, 
     return example
 
 
-def load_cached_audio_features(seq_name):
+def load_cached_audio_features(seq_name: str):
     audio_name = seq_name.split("_")[-2]
     return np.load(os.path.join(FLAGS.audio_cache_dir, f"{audio_name}.npy")), audio_name
 
 
-def cache_audio_features(seq_names):
+def cache_audio_features(seq_names: list):
     FPS = 60
     HOP_LENGTH = 512
     SR = FPS * HOP_LENGTH
@@ -145,7 +149,7 @@ def cache_audio_features(seq_names):
         np.save(save_path, audio_feature)
 
 
-def compute_SMPL_motion(seq_name, motion_dir):
+def compute_SMPL_motion(seq_name: str, motion_dir: str):
     smpl_poses, smpl_scaling, smpl_trans = AISTDataset.load_motion(motion_dir, seq_name)
     smpl_trans /= smpl_scaling
 
@@ -168,7 +172,44 @@ def get_onehot_enc_map(seq_names: list):
     return onehot_enc_map
 
 
-def load_enc_pkl(pkl_path):
+def generate_random_latents(onehot_enc_map: dict, seed: int):
+    # TODO: include train/test split later, if you want to
+
+    latents = [
+        onehot_enc_map[key]['enc'] for key in onehot_enc_map if key != 'len'
+    ]       # always include all original latent vectors
+    dim = latents[0].shape[-1]
+
+    nonzero_positions_rng = np.random.RandomState(seed)
+    values_rng = np.random.RandomState(seed)
+
+    for num_nonzero in range(2, dim+1):
+        num_latents = (dim+1 - num_nonzero) * 100 
+        # 100 is arbitrary. General idea is:
+        # num latents scales DOWN with number of elts to include (to prioritize simpler mixtures)
+        
+        curr_latents = np.zeros((num_latents, dim))
+
+        row_indices = np.broadcast_to(
+            np.arange(num_latents)[:,None],
+            (num_latents, num_nonzero)
+        )
+        nonzero_positions = np.row_stack([
+            nonzero_positions_rng.choice(dim, size=num_nonzero, replace=False)
+            for _ in range(num_latents)
+        ])  # vectorization impossible as choice without replacement along one axis isn't supported
+
+        values = values_rng.uniform(size=(num_latents, num_nonzero))
+        values /= values.sum(axis=-1, keepdims=True)    # sum to 1
+
+        curr_latents[row_indices, nonzero_positions] = values
+
+        latents.append(curr_latents)
+ 
+    return np.row_stack(latents)
+
+
+def load_enc_pkl(pkl_path: str):
     res = None
     if pkl_path is not None and os.path.exists(pkl_path):
         with open(pkl_path, 'rb') as f:
@@ -176,23 +217,29 @@ def load_enc_pkl(pkl_path):
     return res
 
 
-def cache_enc_pkl(pkl_path: str, seq_names: list):
+def cache_enc_pkl(pkl_path: str, seq_names: list, latent_seed: int = None):
     assert len(seq_names) > 0
 
     onehot_enc_map = get_onehot_enc_map(seq_names)
-
     pkl_data = {
         'onehot_enc_map': onehot_enc_map,
     }
+
+    if latent_seed is not None:
+        generated_latents = generate_random_latents(onehot_enc_map, latent_seed)
+        pkl_data.update({
+            'generated_latents': generated_latents
+        })
+
     with open(pkl_path, 'wb') as f:
         pickle.dump(pkl_data, f)
 
 
-def get_latent_from_seq_name(seq_name, enc_pkl_data):
+def get_latent_from_seq_name(seq_name: str, enc_pkl_data: dict):
     return enc_pkl_data['onehot_enc_map'][seq_name]['enc']
 
 
-def get_encoded_input(seq_name, enc_pkl_data):
+def get_encoded_input(seq_name: str, enc_pkl_data: dict):
     if enc_pkl_data is None:
         return None
 
@@ -239,7 +286,7 @@ def main(_):
     enc_pkl_data = None
     if FLAGS.enc_pkl_path is not None:
         if not os.path.exists(FLAGS.enc_pkl_path):
-            cache_enc_pkl(FLAGS.enc_pkl_path, seq_names)
+            cache_enc_pkl(FLAGS.enc_pkl_path, seq_names, FLAGS.random_latent_seed)
             print(f"Cached encoding data at {FLAGS.enc_pkl_path}")
         else:
             print(f"Used existing encoding data at {FLAGS.enc_pkl_path}")
