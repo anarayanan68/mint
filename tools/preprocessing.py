@@ -184,8 +184,8 @@ def generate_random_latents(onehot_enc_map: dict, seed: int):
     values_rng = np.random.RandomState(seed)
 
     for num_nonzero in range(2, dim+1):
-        num_latents = (dim+1 - num_nonzero) * 100 
-        # 100 is arbitrary. General idea is:
+        num_latents = (dim+1 - num_nonzero) * 2 
+        # 2 is arbitrary. General idea is:
         # num latents scales DOWN with number of elts to include (to prioritize simpler mixtures)
         
         curr_latents = np.zeros((num_latents, dim))
