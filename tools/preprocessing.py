@@ -180,31 +180,32 @@ def generate_random_latents(onehot_enc_map: dict, seed: int):
     ]       # always include all original latent vectors
     dim = latents[0].shape[-1]
 
-    # nonzero_positions_rng = np.random.RandomState(seed)
-    # values_rng = np.random.RandomState(seed)
+    max_num_nonzero = 2 # adjust as needed
+    max_num_nonzero = min(max_num_nonzero, dim)
 
-    # for num_nonzero in range(2, dim+1):
-    #     num_latents = (dim+1 - num_nonzero) * 2 
-    #     # 2 is arbitrary. General idea is:
-    #     # num latents scales DOWN with number of elts to include (to prioritize simpler mixtures)
+    nonzero_positions_rng = np.random.RandomState(seed)
+    values_rng = np.random.RandomState(seed)
+
+    for num_nonzero in range(2, max_num_nonzero+1):
+        num_latents = 1 # adjust as needed, possibly acc. to num_nonzero
         
-    #     curr_latents = np.zeros((num_latents, dim))
+        curr_latents = np.zeros((num_latents, dim))
 
-    #     row_indices = np.broadcast_to(
-    #         np.arange(num_latents)[:,None],
-    #         (num_latents, num_nonzero)
-    #     )
-    #     nonzero_positions = np.row_stack([
-    #         nonzero_positions_rng.choice(dim, size=num_nonzero, replace=False)
-    #         for _ in range(num_latents)
-    #     ])  # vectorization impossible as choice without replacement along one axis isn't supported
+        row_indices = np.broadcast_to(
+            np.arange(num_latents)[:,None],
+            (num_latents, num_nonzero)
+        )
+        nonzero_positions = np.row_stack([
+            nonzero_positions_rng.choice(dim, size=num_nonzero, replace=False)
+            for _ in range(num_latents)
+        ])  # vectorization impossible as choice without replacement along one axis isn't supported
 
-    #     values = values_rng.uniform(size=(num_latents, num_nonzero))
-    #     values /= values.sum(axis=-1, keepdims=True)    # sum to 1
+        values = values_rng.uniform(size=(num_latents, num_nonzero))
+        values /= values.sum(axis=-1, keepdims=True)    # sum to 1
 
-    #     curr_latents[row_indices, nonzero_positions] = values
+        curr_latents[row_indices, nonzero_positions] = values
 
-    #     latents.append(curr_latents)
+        latents.append(curr_latents)
  
     return np.row_stack(latents)
 
