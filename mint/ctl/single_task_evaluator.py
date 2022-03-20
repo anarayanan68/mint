@@ -59,15 +59,17 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
 
     super(SingleTaskEvaluator, self).__init__(
         eval_dataset=eval_dataset, options=evaluator_options)
+    
+    self.curr_batch = 0
 
   def eval_begin(self):
     """Actions to take once before every eval loop."""
     for metric in self.metrics:
       metric.reset_states()
+    self.curr_batch = 0
 
   def eval_step(self, iterator):
     """One eval step. Called multiple times per eval loop by the superclass."""
-
     def step_fn_autoregressive(inputs):
       # [batch_size, steps, motion_feature_dimension]
       outputs = self.model.infer_auto_regressive(inputs, steps=1200)
@@ -91,10 +93,15 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
     
     def step_fn_overfit(inputs):
       # [batch_size, target_length, motion_feature_dimension]
-      outputs = self.model(inputs)[:, :inputs["target"].shape[1]]
-      # [batch_size, motion_seq_length + target_length, motion_feature_dimension]
-      outputs = tf.concat([inputs["actual_motion_input"], outputs], axis=1)
-      targets = tf.concat([inputs["actual_motion_input"], inputs["target"]], axis=1)
+      outputs = self.model(inputs)[:, :inputs["target"].shape[-2]]
+      
+      if self.curr_batch == 0 and self.output_dir is not None:
+        os.makedirs(self.output_dir, exist_ok=True)
+        # save targets
+        targets = inputs["target"][0].numpy() # [0] for first in batch - all entries in batch are same for this
+        save_path = os.path.join(self.output_dir, "TARGETS.npy")
+        print (f"Saving targets to {save_path}")
+        np.save(save_path, targets)
 
       batch_size = tf.shape(outputs)[0]
       if self.output_dir is not None:
@@ -102,20 +109,14 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
         # save each batch instance seperately
         for i in range(batch_size):
           output = outputs[i].numpy()
-          save_path = os.path.join(self.output_dir, "OUTPUT--%s_%s.npy" % (
-              inputs["motion_name"][i].numpy().decode("utf-8"),
-              inputs["audio_name"][i].numpy().decode("utf-8"),
-          ))
-          print ("Saving output to %s" % save_path)
+          save_path = os.path.join(self.output_dir, f"OUTPUT--batch_{self.curr_batch}_instance_{i}.npy")
+          print (f"Saving output to {save_path}")
           np.save(save_path, output)
 
-          target = targets[i].numpy()
-          save_path = os.path.join(self.output_dir, "TARGET--%s_%s.npy" % (
-              inputs["motion_name"][i].numpy().decode("utf-8"),
-              inputs["audio_name"][i].numpy().decode("utf-8"),
-          ))
-          print ("Saving target to %s" % save_path)
-          np.save(save_path, target)
+          latent = inputs["motion_name_enc"][i].numpy()
+          save_path = os.path.join(self.output_dir, f"LATENT--batch_{self.curr_batch}_instance_{i}.npy")
+          print (f"Saving latent to {save_path}")
+          np.save(save_path, latent)
       # calculate metrics
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
@@ -125,6 +126,8 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       step_fn_overfit if self.overfit_expt else step_fn_autoregressive,
       args=(next(iterator),)
     )
+
+    self.curr_batch += 1
 
   def eval_end(self):
     """Actions to take once after an eval loop."""

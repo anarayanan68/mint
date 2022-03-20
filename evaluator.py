@@ -14,6 +14,7 @@
 """Module to evaluate a conditional flow prediction model."""
 
 import os
+import pickle
 
 from absl import app
 from absl import flags
@@ -43,12 +44,15 @@ flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment
 flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next checkpoint, as per tf.train.checkpoints_iterator. Pass a small value to run once and exit.')
 flags.DEFINE_string('name_enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
-
+flags.DEFINE_string('enc_pkl_path', None,
+                    'Path to PKL file containing generated latent vectors.')
 
 def evaluate():
   """Evaluates the given model."""
   configs = config_util.get_configs_from_pipeline_file(FLAGS.config_path)
   name_enc_config_yaml = config_util.read_yaml_config(FLAGS.name_enc_cfg_yaml_path) # None case handled here
+  with open(FLAGS.enc_pkl_path, 'rb') as pf:
+    enc_pkl_data = pickle.load(pf)
 
   model_config = configs['model']
   eval_config = configs['eval_config']
@@ -58,7 +62,8 @@ def evaluate():
       dataset_config=eval_dataset_config,
       is_training=False,
       use_tpu=False,
-      overfit_expt=FLAGS.overfit_expt)
+      overfit_expt=FLAGS.overfit_expt,
+      enc_pkl_data=enc_pkl_data)
 
   model_ = model_builder.build(model_config, True, name_encoder_config_yaml=name_enc_config_yaml, dataset_config=eval_dataset_config)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
