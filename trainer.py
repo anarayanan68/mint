@@ -178,7 +178,7 @@ def train():
   controller = orbit.Controller(
       trainer=trainer,
       strategy=strategy,
-      steps_per_loop=10,
+      steps_per_loop=1,
       checkpoint_manager=tf.train.CheckpointManager(
           tf.train.Checkpoint(optimizer=optimizer, model=model_),
           directory=FLAGS.model_dir,
@@ -186,9 +186,9 @@ def train():
           step_counter=trainer.optimizer.iterations,
           max_to_keep=5),
       summary_dir=FLAGS.model_dir,
-      summary_interval=10,
+      summary_interval=1,
       global_step=trainer.optimizer.iterations)
-  controller.train(1)
+
   controller.train(FLAGS.steps - 1)
 
 

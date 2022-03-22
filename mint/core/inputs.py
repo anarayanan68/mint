@@ -129,7 +129,8 @@ def create_input(train_eval_config,
 
   if is_training:
     # For training, we want shuffling; not so for eval.
-    ds = ds.shuffle(100).repeat()
+    # ds = ds.shuffle(100).repeat()
+    ds = ds.repeat()
   else:
     # Since we evaluate for a fixed number of steps we don't want to encounter
     # out-of-range exceptions.
