@@ -11,29 +11,34 @@ from mint.utils import inputs_util
 
 
 class Vec2SeqEncoder(keras.Model):
-    def __init__(self, input_dim, hidden_size, target_shape, wt_seed, name="Vec2SeqEncoder", **kwargs):
+    def __init__(self, num_primitives, target_shape, wt_seed, name="Vec2SeqEncoder", **kwargs):
         super(Vec2SeqEncoder, self).__init__(name=name, **kwargs)
 
-        self.input_dim = input_dim
-        self.hidden_size = hidden_size
+        self.num_primitives = num_primitives
         self.target_shape = target_shape
         self.wt_seed = wt_seed
 
-        initializer = keras.initializers.RandomNormal(mean=0., stddev=1., seed=wt_seed)
-        self.encoder = keras.Sequential(
-            [
-                layers.Input((input_dim,)),
-                layers.Dense(hidden_size, activation='tanh', use_bias=True, kernel_initializer=initializer, bias_initializer=initializer),
-                layers.Dense(np.prod(target_shape), use_bias=True, kernel_initializer=initializer, bias_initializer=initializer),
-                layers.Reshape(target_shape)
-            ],
-            name="encoder"
-        )
+        prod_target_shape = np.prod(target_shape)
+        initializer = keras.initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
+        self.embedding = layers.Embedding(num_primitives, prod_target_shape,
+            input_length=num_primitives, embeddings_initializer=initializer, name='embedding')
 
-        self.build((None,input_dim))    # needed before calling summary() etc. No intention to build on the fly
-
+        self.emb_input = tf.convert_to_tensor(np.arange(num_primitives))
+        
     def call(self, vec):
-        return self.encoder(vec)
+        # vec shape: (batch_size, num_primitives)
+        # embedding should be of shape: (batch_size, num_primitives, prod(target_shape)), collecting embeddings for all indices
+        # then batch matrix mult of vec with embedding will yield weighted average, which can be reshaped and returned
+
+        batch_size = vec.shape[0]
+        # collect all possible indices, repeated per batch
+        emb_input = tf.broadcast_to(self.emb_input, (batch_size, self.num_primitives))
+        # get embeddings for all indices in correct dtype
+        embeddings = tf.cast(self.embedding(emb_input), vec.dtype)
+        # get weighted average according to input vector
+        res = tf.matmul(tf.expand_dims(vec, 1), embeddings)
+        # reshape to target shape and return
+        return tf.reshape(res, (batch_size,) + self.target_shape)
 
 
 class NameFACTJointModel(keras.Model):
@@ -42,8 +47,7 @@ class NameFACTJointModel(keras.Model):
 
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)
         self.name_enc_stage = Vec2SeqEncoder(
-            input_dim=encoder_config_yaml['input_dim'],
-            hidden_size=encoder_config_yaml['hidden_size'],
+            num_primitives=encoder_config_yaml['num_primitives'],
             target_shape=tuple((int(x) for x in encoder_config_yaml['target_shape'].split(','))),
             wt_seed=encoder_config_yaml['wt_seed'],
         )
