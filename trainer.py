@@ -49,8 +49,10 @@ flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment
 flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
 flags.DEFINE_string('name_enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
-flags.DEFINE_string('enc_pkl_path', None,
-                    'Path to PKL file containing generated latent vectors.')
+flags.DEFINE_integer(
+    'random_latent_seed', None,
+    'Random seed int >= 0, to create random latents. No such latents generated if not passed.',
+    lower_bound=0)
 
 def _create_learning_rate(learning_rate_config):
   """Create optimizer learning rate based on config.
@@ -102,7 +104,7 @@ def _create_learning_rate(learning_rate_config):
   return lr_schedule
 
 
-def get_dataset_fn(configs, enc_pkl_data=None):
+def get_dataset_fn(configs, random_latent_seed=None):
   """Returns tf dataset."""
 
   def dataset_fn(input_context=None):
@@ -114,7 +116,7 @@ def get_dataset_fn(configs, enc_pkl_data=None):
         train_config, train_dataset_config,
         use_tpu=use_tpu,
         overfit_expt=FLAGS.overfit_expt,
-        enc_pkl_data=enc_pkl_data)
+        random_latent_seed=random_latent_seed)
     return dataset
 
   return dataset_fn
@@ -148,14 +150,12 @@ def train():
   """Trains model."""
   configs = config_util.get_configs_from_pipeline_file(FLAGS.config_path)
   name_enc_config_yaml = config_util.read_yaml_config(FLAGS.name_enc_cfg_yaml_path) # None case handled here
-  with open(FLAGS.enc_pkl_path, 'rb') as pf:
-    enc_pkl_data = pickle.load(pf)
-
+  
   model_config = configs['model']
   train_config = configs['train_config']
 
   strategy = distribution_strategy()
-  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, enc_pkl_data))
+  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, FLAGS.random_latent_seed))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
       name_encoder_config_yaml=name_enc_config_yaml, dataset_config=configs['train_dataset'])

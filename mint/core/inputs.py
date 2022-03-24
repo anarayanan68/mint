@@ -23,7 +23,7 @@ def create_input(train_eval_config,
                  is_training=True,
                  use_tpu=False,
                  overfit_expt=False,
-                 enc_pkl_data=None):
+                 random_latent_seed=None):
   """Create batched input data.
 
   Args:
@@ -33,7 +33,7 @@ def create_input(train_eval_config,
     is_training: Whether this is training stage.
     use_tpu: Whether or not provide inputs for TPU.
     overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
-    enc_pkl_data: Dict (read from PKL file) with generated latent vectors to use as input
+    random_latent_seed: Random seed used to generate (interpolated) inputs
 
   Returns:
     ds: A tf.data.Dataset, with the following features:
@@ -123,9 +123,7 @@ def create_input(train_eval_config,
         num_parallel_calls=num_cpu_threads)
 
   # Convert dataset from clip-based to latent-based
-  latents = tf.convert_to_tensor(enc_pkl_data['generated_latents'], dtype=tf.float32)
-  # -> dtype used explicitly to match target sequence dtype (as specified in `name_to_features`)
-  ds = inputs_util.compute_latent_based_dataset(ds, latents, num_parallel_calls=num_cpu_threads)
+  ds = inputs_util.compute_latent_based_dataset(ds, random_latent_seed, num_parallel_calls=num_cpu_threads)
 
   if is_training:
     # For training, we want shuffling; not so for eval.

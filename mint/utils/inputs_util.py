@@ -14,6 +14,9 @@
 """Util functions for creating inputs."""
 import tensorflow as tf
 
+import numpy as np
+from collections import namedtuple
+
 
 def get_modality_to_param_dict(dataset_config):
   """Creates a map from modality name to modality parameters."""
@@ -138,27 +141,74 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
 
 
 def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
-                                 latents: tf.Tensor,
+                                 random_latent_seed: int,
                                  num_parallel_calls: int = 2) -> tf.data.Dataset:
   # Extract relevant data from clip based dataset
   sample_data = next(iter(clip_based_ds))
   audio_input = tf.zeros_like(sample_data["audio_input"]) # zero out all audio - another way to "remove" audio input
 
-  targets = [None] * sample_data["motion_name_enc"].shape[-1]
+  num_clips = sample_data["motion_name_enc"].shape[-1]
+  targets = [None] * num_clips
   num_found = 0
-  num_to_find = len(targets)
 
   for example in clip_based_ds:
     enc = example["motion_name_enc"]
     idx = tf.argmax(enc)  # find the single "hot" index
+
     if targets[idx] is None:
       targets[idx] = example["target"]
       num_found += 1
-      if num_found == num_to_find:
+      if num_found == num_clips:
         break
   targets = tf.stack(targets)
 
-  latent_based_ds = tf.data.Dataset.from_tensor_slices(latents)
+  # Build generator
+  def latent_generator(num_primitives, seed):
+    ScheduleKeys = namedtuple('ScheduleKeys', ['blend_num', 'alpha_max'])
+
+    schedule = {
+      ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 10}
+    }
+    for alpha_max in np.arange(0.05, 0.55, 0.05):
+      schedule.update({
+        ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 10}
+      })
+
+    position_gen = np.random.RandomState(seed)
+    alpha_gen = np.random.RandomState(seed)
+
+    for keys, vdict in schedule.items():
+      blend_num = keys.blend_num
+      num_latents = vdict['num_latents']
+
+      if blend_num == 1:
+        # pure primitives - cycle through in order to learn them first
+        for ctr in range(num_latents):
+          pos = ctr % num_primitives
+          res = tf.one_hot(pos, depth=num_primitives)
+          # tf.print(res)
+          yield res
+
+      else:
+        alpha_max = keys.alpha_max
+
+        for ctr in range(num_latents):
+          alphas = alpha_gen.uniform(low=0.0, high=alpha_max, size=(blend_num-1,))
+          alphas = np.concatenate([alphas, 1.0 - np.sum(alphas,keepdims=True)], axis=-1)
+
+          positions = position_gen.choice(num_primitives, size=(blend_num,), replace=False)
+
+          res = np.zeros(shape=(num_primitives,))
+          res[positions] = alphas
+          # tf.print(tf.convert_to_tensor(res))
+          yield tf.convert_to_tensor(res)
+
+
+  latent_based_ds = tf.data.Dataset.from_generator(
+    latent_generator,
+    args=[num_clips, random_latent_seed],
+    output_signature=tf.TensorSpec(shape=(num_clips,), dtype=tf.float32)
+  )
   latent_based_ds = latent_based_ds.map(
     lambda latent: {
       "motion_name_enc": latent,
