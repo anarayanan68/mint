@@ -41,7 +41,7 @@ flags.DEFINE_string(
     'Initializer for prediction head. Valid options are any '
     'of the tf.keras.initializers.')
 flags.DEFINE_integer('steps', 2400000, 'Number of training steps')
-flags.DEFINE_integer('warmup_steps', 1000,
+flags.DEFINE_integer('warmup_steps', None,
                      'Number of learning rate warmup steps')
 flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
