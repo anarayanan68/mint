@@ -167,11 +167,11 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
     ScheduleKeys = namedtuple('ScheduleKeys', ['blend_num', 'alpha_max'])
 
     schedule = {
-      ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 1000}
+      ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 800}
     }
     for alpha_max in np.arange(0.05, 0.55, 0.05):
       schedule.update({
-        ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 100}
+        ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 320}
       })
 
     position_gen = np.random.RandomState(seed)
