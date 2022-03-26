@@ -1,10 +1,9 @@
 """Models used for motion primitive experiments."""
 
-import imp
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow.keras import layers, initializers, regularizers
 
 from mint.core import fact_model, base_model_util
 from mint.utils import inputs_util
@@ -19,8 +18,8 @@ class Vec2SeqEncoder(keras.Model):
         self.wt_seed = wt_seed
 
         prod_target_shape = np.prod(target_shape)
-        initializer = keras.initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
-        regularizer = keras.regularizers.L2(l2=1e-3)
+        initializer = initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
+        regularizer = regularizers.L2(l2=1e-3)
         self.embedding = layers.Embedding(num_primitives, prod_target_shape,
             input_length=num_primitives, embeddings_initializer=initializer, embeddings_regularizer=None, name='embedding')
 
