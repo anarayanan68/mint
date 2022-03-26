@@ -27,7 +27,7 @@ class Vec2SeqEncoder(keras.Model):
         self.emb_input = tf.convert_to_tensor(np.arange(num_primitives))
         
     def call(self, vec):
-        # vec shape: (batch_size, num_primitives)
+        # vec shape: (batch_size, num_primitives), will be expanded to (batch_size, 1, num_primitives) here
         # embedding should be of shape: (batch_size, num_primitives, prod(target_shape)), collecting embeddings for all indices
         # then batch matrix mult of vec with embedding will yield weighted average, which can be reshaped and returned
 
