@@ -182,9 +182,9 @@ def train():
       checkpoint_manager=tf.train.CheckpointManager(
           tf.train.Checkpoint(optimizer=optimizer, model=model_),
           directory=FLAGS.model_dir,
-          checkpoint_interval=1000,
+          checkpoint_interval=400,
           step_counter=trainer.optimizer.iterations,
-          max_to_keep=5),
+          max_to_keep=None),
       summary_dir=FLAGS.model_dir,
       summary_interval=1,
       global_step=trainer.optimizer.iterations)
