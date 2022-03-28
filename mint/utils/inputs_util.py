@@ -142,6 +142,7 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
 
 def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
                                  random_latent_seed: int,
+                                 is_training: bool,
                                  num_parallel_calls: int = 2) -> tf.data.Dataset:
   # Extract relevant data from clip based dataset
   sample_data = next(iter(clip_based_ds))
@@ -163,16 +164,25 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
   targets = tf.stack(targets)
 
   # Build generator
-  def latent_generator(num_primitives, seed):
+  def latent_generator(num_primitives, seed, is_training):
     ScheduleKeys = namedtuple('ScheduleKeys', ['blend_num', 'alpha_max'])
 
-    schedule = {
-      ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 800}
-    }
-    for alpha_max in np.arange(0.05, 0.55, 0.05):
-      schedule.update({
-        ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 320}
-      })
+    if is_training:
+      schedule = {
+        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 800}
+      }
+      for alpha_max in np.arange(0.05, 0.55, 0.05):
+        schedule.update({
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 320}
+        })
+    else:
+      schedule = {
+        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives}
+      }
+      for alpha_max in np.arange(0.1, 0.55, 0.1):
+        schedule.update({
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': 10}
+        })
 
     position_gen = np.random.RandomState(seed)
     alpha_gen = np.random.RandomState(seed)
@@ -206,7 +216,7 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
 
   latent_based_ds = tf.data.Dataset.from_generator(
     latent_generator,
-    args=[num_clips, random_latent_seed],
+    args=[num_clips, random_latent_seed, is_training],
     output_signature=tf.TensorSpec(shape=(num_clips,), dtype=tf.float32)
   )
   latent_based_ds = latent_based_ds.map(

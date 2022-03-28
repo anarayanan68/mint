@@ -123,7 +123,8 @@ def create_input(train_eval_config,
         num_parallel_calls=num_cpu_threads)
 
   # Convert dataset from clip-based to latent-based
-  ds = inputs_util.compute_latent_based_dataset(ds, random_latent_seed, num_parallel_calls=num_cpu_threads)
+  ds = inputs_util.compute_latent_based_dataset(ds, random_latent_seed,
+      is_training=is_training, num_parallel_calls=num_cpu_threads)
 
   if is_training:
     # For training, we want shuffling; not so for eval.
