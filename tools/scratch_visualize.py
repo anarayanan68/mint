@@ -36,7 +36,7 @@ if os.path.isfile(npy_path) and npy_path.endswith('.npy'):
         out_video_fps=out_fps
     )
 elif os.path.isdir(npy_path):
-    for file_path in glob.glob(os.path.join(npy_path, '*.npy'), recursive=True):
+    for file_path in glob.glob(os.path.join(npy_path, 'OUTPUT--*.npy'), recursive=True):
         out_vid_path = os.path.splitext(file_path)[0] + ".mp4"
         visualize_motion(
             load_motion(file_path, num_frames),
