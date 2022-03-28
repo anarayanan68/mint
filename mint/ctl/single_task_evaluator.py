@@ -59,14 +59,14 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
 
     super(SingleTaskEvaluator, self).__init__(
         eval_dataset=eval_dataset, options=evaluator_options)
-    
-    self.curr_batch = 0
+
 
   def eval_begin(self):
     """Actions to take once before every eval loop."""
     for metric in self.metrics:
       metric.reset_states()
-    self.curr_batch = 0
+    self.all_inputs = []
+    self.targets = None
 
   def eval_step(self, iterator):
     """One eval step. Called multiple times per eval loop by the superclass."""
@@ -95,28 +95,25 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       # [batch_size, target_length, motion_feature_dimension]
       outputs = self.model(inputs)[:, :inputs["target"].shape[-2]]
       
-      if self.curr_batch == 0 and self.output_dir is not None:
+      if self.targets is None and self.output_dir is not None:
         os.makedirs(self.output_dir, exist_ok=True)
-        # save targets
-        targets = inputs["target"][0].numpy() # [0] for first in batch - all entries in batch are same for this
-        save_path = os.path.join(self.output_dir, "TARGETS.npy")
-        print (f"Saving targets to {save_path}")
-        np.save(save_path, targets)
+        self.targets = inputs["target"][0].numpy() # [0] for first in batch - all entries in all inputs are same for this
 
+      self.all_inputs.append(inputs["motion_name_enc"])
       batch_size = tf.shape(outputs)[0]
       if self.output_dir is not None:
         os.makedirs(self.output_dir, exist_ok=True)
         # save each batch instance seperately
         for i in range(batch_size):
           output = outputs[i].numpy()
-          save_path = os.path.join(self.output_dir, f"OUTPUT--batch_{self.curr_batch}_instance_{i}.npy")
+          vec = inputs["motion_name_enc"][i].numpy()
+          fname = '_+_'.join([
+            f"{vi:0.3f}x_P{i:02d}"
+            for i,vi in zip(vec.nonzero()[0], vec[vec.nonzero()])
+          ])
+          save_path = os.path.join(self.output_dir, f"OUTPUT--{fname}.npy")
           print (f"Saving output to {save_path}")
           np.save(save_path, output)
-
-          latent = inputs["motion_name_enc"][i].numpy()
-          save_path = os.path.join(self.output_dir, f"LATENT--batch_{self.curr_batch}_instance_{i}.npy")
-          print (f"Saving latent to {save_path}")
-          np.save(save_path, latent)
       # calculate metrics
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
@@ -127,10 +124,21 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       args=(next(iterator),)
     )
 
-    self.curr_batch += 1
 
   def eval_end(self):
     """Actions to take once after an eval loop."""
+
+    # save targets
+    save_path = os.path.join(self.output_dir, "TARGETS.npy")
+    print (f"Saving targets to {save_path}")
+    np.save(save_path, self.targets)
+
+    # save inputs used
+    self.all_inputs = np.stack(self.all_inputs)
+    save_path = os.path.join(self.output_dir, f"INPUTS.npy")
+    print (f"Saving inputs to {save_path}")
+    np.save(save_path, self.all_inputs)
+
     with self.strategy.scope():
       # Export the metrics.
       metrics = {metric.name: metric.result() for metric in self.metrics}
