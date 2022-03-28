@@ -17,81 +17,17 @@ Options:
 
 import os
 import subprocess
-import signal
-from typing import Tuple
-import vedo
-import torch
 import time
 import numpy as np
 import random
 import re
-from scipy.spatial.transform import Rotation as R
-from scipy import linalg
 from docopt import docopt
 import glob
 import tqdm
 from smplx import SMPL
 import soundfile as sf
 
-from conversion_util import rotation_6d_to_matrix
-
-
-def recover_to_axis_angles(motion: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    batch_size, seq_len, dim = motion.shape
-    transl = motion[:, :, :3]
-    rot_6D = motion[:, :, 3:].reshape(batch_size, seq_len, -1, 6)
-    rotmats = rotation_6d_to_matrix(rot_6D)
-    axis_angles = R.from_matrix(rotmats.reshape(-1,3,3)).as_rotvec().reshape(batch_size, seq_len, -1, 3)
-    return axis_angles, transl
-
-
-_interrupted = False
-
-
-def visualize(motion: np.ndarray, smpl_model: SMPL, vedo_video: vedo.io.Video) -> None:
-    global _interrupted
-
-    smpl_poses, smpl_trans = recover_to_axis_angles(motion)
-    smpl_poses = np.squeeze(smpl_poses, axis=0)  # (seq_len, 24, 3)
-    smpl_trans = np.squeeze(smpl_trans, axis=0)  # (seq_len, 3)
-    keypoints3d = smpl_model.forward(
-        global_orient=torch.from_numpy(smpl_poses[:, 0:1]).float(),
-        body_pose=torch.from_numpy(smpl_poses[:, 1:]).float(),
-        transl=torch.from_numpy(smpl_trans).float(),
-    ).joints.detach().numpy()   # (seq_len, 24, 3)
-
-    bbox_center = (
-        keypoints3d.reshape(-1, 3).max(axis=0)
-        + keypoints3d.reshape(-1, 3).min(axis=0)
-    ) / 2.0
-    bbox_size = (
-        keypoints3d.reshape(-1, 3).max(axis=0) 
-        - keypoints3d.reshape(-1, 3).min(axis=0)
-    )
-    world = vedo.Box(bbox_center, bbox_size[0], bbox_size[1], bbox_size[2]).wireframe()
-    plotter = vedo.show(world, axes=True, viewup="y", interactive=False)
-    for kpts in keypoints3d:
-        pts = vedo.Points(kpts).c("red")
-        plotter = vedo.show(world, pts)
-
-        vedo_video.addFrame()
-
-        if plotter.escaped or _interrupted:
-            _interrupted = False
-            break  # if ESC or C-C
-        time.sleep(0.01)
-    # vedo.interactive().close()
-    plotter.close()
-
-def handler_sigint(signum, frame):
-    global _interrupted
-
-    ch = input('\nDetected KB interrupt. Move on to next file? [y]/n:\t')
-    if ch == 'n':
-        print('Quitting.')
-        exit(0)
-    else:
-        _interrupted = True
+from visualization_util import load_motion, visualize_motion
 
 
 if __name__ == "__main__":
@@ -104,9 +40,12 @@ if __name__ == "__main__":
     out_dir = os.path.join(args['--expt_dir'], 'viz')
     os.makedirs(out_dir, exist_ok=True)
 
-    # set smpl
-    smpl = SMPL(model_path=smpl_dir, gender='MALE', batch_size=1)
+    # load smpl model
+    gender = 'MALE'
+    batch_size = 1
+    smpl = SMPL(model_path=smpl_dir, gender=gender, batch_size=batch_size)
 
+    # load result filenames according to settings
     result_files = glob.glob(os.path.join(pred_dir, f"{args['--pattern']}.npy"))
     if args['--random'] is not None:
         random.seed(time.time() if args['--random'] == '-1' else int(args['--random']))
@@ -114,25 +53,27 @@ if __name__ == "__main__":
     if args['--num_files'] is not None:
         result_files = result_files[:int(args['--num_files'])]
 
-    signal.signal(signal.SIGINT, handler_sigint)
+    # regex to separate out video and audio names
     match_obj = re.compile(r'.*(g\w+_s\w+_cAll_d\w+_m\w+_ch\w+)_(m\w+).*')
 
+    # processing and visualization parameters
+    BBOX = None
+    FPS = 60
+    HOP_LENGTH = 512    # samples between two frames
+    SR = FPS * HOP_LENGTH
+
     for result_file in tqdm.tqdm(result_files):
-        result_motion = np.load(result_file)[None, ...]  # [1, 120 + 1200, 225]
-        FPS = 60
-        HOP_LENGTH = 512    # samples between two frames
-        SR = FPS * HOP_LENGTH
-        
+        result_motion = load_motion(result_file)
+
+        # extract video & audio names to sync, from motion file name
         base_name = os.path.splitext(os.path.basename(result_file))[0]
         match_res = match_obj.match(base_name)
         vid_name, aud_name = match_res.group(1), match_res.group(2)
-        vid_name = vid_name.replace('_cAll', '_c01')
-        vid_file = vid_name + ".mp4"
+
+        vid_name = vid_name.replace('_cAll', '_c01') + ".mp4"
         aud_file = aud_name + ".wav"
 
-        trunc_nframes = result_motion.shape[1]
-        aud_file_matched = f"{aud_name}__{trunc_nframes}_frames.wav"
-
+        # sync video
         if os.path.exists(os.path.join(video_dir, vid_file)):
             print(f"Video {vid_file} already synced.")
         else:
@@ -140,9 +81,9 @@ if __name__ == "__main__":
             subprocess.call(["rsync",
                 f"anarayanan68@sky1.cc.gatech.edu:/srv/share/datasets/AIST/aist_plusplus_media/{vid_file}",
                 video_dir])
-            print('Done.')
         vid_file = os.path.join(video_dir, vid_file)
 
+        # sync audio
         if os.path.exists(os.path.join(audio_dir, aud_file)):
             print(f"Audio {aud_file} already synced.")
         else:
@@ -150,10 +91,12 @@ if __name__ == "__main__":
             subprocess.call(["rsync",
                 f"anarayanan68@sky1.cc.gatech.edu:/srv/share/datasets/AIST/aist_plusplus_media/audio/wav/{aud_file}",
                 audio_dir])
-
         aud_file = os.path.join(audio_dir, aud_file)
-        aud_file_matched = os.path.join(audio_dir, aud_file_matched)
 
+        # truncate audio to length of video, save as new audio
+        trunc_nframes = result_motion.shape[1]
+        aud_file_matched = f"{aud_name}__{trunc_nframes}_frames.wav"
+        aud_file_matched = os.path.join(audio_dir, aud_file_matched)
         if os.path.exists(aud_file_matched):
             print(f"Audio {aud_file_matched} already processed.")
         else:
@@ -167,6 +110,7 @@ if __name__ == "__main__":
         print(f"-- Audio used: {aud_file_matched}")
         print(f"-- Seed video used: {vid_file}")
 
+        # handle pre-existing output video
         out_combined_file = os.path.join(out_dir, f"out__{base_name}.mp4")
         if os.path.exists(out_combined_file):
             if args['--skip_existing']:
@@ -180,13 +124,12 @@ if __name__ == "__main__":
                     print('Skipping this file.\n')
                     continue
 
+        # visualize and generate intermediate video (no audio)
         interm_vid_file = os.path.join(out_dir, f"no-audio__{base_name}.mp4")
-        interm_video = vedo.io.Video(interm_vid_file, duration=None, fps=FPS, backend='ffmpeg')
-        visualize(result_motion, smpl, interm_video)
-        interm_video.close()
+        visualize_motion(result_motion, smpl, bbox=BBOX, out_video_path=interm_vid_file, out_video_fps=FPS)
 
+        # add audio track using ffmpeg 
         print(f"Creating video with synchronized audio at {out_combined_file}...")
-
         # Command is like: `ffmpeg -i ...__out-no-audio.mp4 -i ..._matched.wav
         #                   -c:a libmp3lame -c:v copy -map 0:v:0 -map 1:a:0
         #                   ..._out.mp4 -y -hide_banner -loglevel error`
@@ -198,6 +141,7 @@ if __name__ == "__main__":
             '-y', '-hide_banner', '-loglevel', 'error'
         ])
 
+        # delete intermediate video and finish loop iteration
         os.remove(interm_vid_file)
         print(f"Done, and deleted intermediate {interm_vid_file}\n")
 
