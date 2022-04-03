@@ -183,6 +183,11 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
         schedule.update({
           ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': 10}
         })
+      schedule.update({
+        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_latents': 10},
+        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_latents': 10},
+        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_latents': 10},
+      })
 
     position_gen = np.random.RandomState(seed)
     alpha_gen = np.random.RandomState(seed)
