@@ -111,6 +111,8 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
             f"{vi:0.3f}x_P{i:02d}"
             for i,vi in zip(vec.nonzero()[0], vec[vec.nonzero()])
           ])
+          audio_name = inputs["audio_name"][i].numpy().decode("utf-8")
+          fname = f'{fname}--audio_{audio_name}'
           save_path = os.path.join(self.output_dir, f"OUTPUT--{fname}.npy")
           print (f"Saving output to {save_path}")
           np.save(save_path, output)
