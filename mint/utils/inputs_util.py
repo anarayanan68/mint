@@ -140,16 +140,16 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
   return example
 
 
-def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
-                                 random_latent_seed: int,
-                                 is_training: bool,
-                                 num_parallel_calls: int = 2) -> tf.data.Dataset:
+def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
+                                   random_encoding_seed: int,
+                                   is_training: bool) -> tf.data.Dataset:
   # Extract relevant data from clip based dataset
   sample_data = next(iter(clip_based_ds))
-  audio_input = tf.zeros_like(sample_data["audio_input"]) # zero out all audio - another way to "remove" audio input
+  audio_input_shape = sample_data["audio_input"].shape
 
   num_clips = sample_data["motion_name_enc"].shape[-1]
   targets = [None] * num_clips
+  audios = [None] * num_clips
   num_found = 0
 
   for example in clip_based_ds:
@@ -158,80 +158,89 @@ def compute_latent_based_dataset(clip_based_ds: tf.data.Dataset,
 
     if targets[idx] is None:
       targets[idx] = example["target"]
+      audios[idx] = example["audio_input"]
       num_found += 1
       if num_found == num_clips:
         break
   targets = tf.stack(targets)
+  audios = tf.stack(audios)
 
   # Build generator
-  def latent_generator(num_primitives, seed, is_training):
+  def encoding_generator(num_primitives, targets, audios, seed, is_training):
     ScheduleKeys = namedtuple('ScheduleKeys', ['blend_num', 'alpha_max'])
 
     if is_training:
       schedule = {
-        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives * 800}
+        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_encodings': num_primitives * 800}
       }
       for alpha_max in np.arange(0.05, 0.55, 0.05):
         schedule.update({
-          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': num_primitives * 320}
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': num_primitives * 320}
         })
     else:
       schedule = {
-        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_latents': num_primitives}
+        ScheduleKeys(blend_num=1, alpha_max=0.0): {'num_encodings': num_primitives}
       }
       for alpha_max in np.arange(0.1, 0.55, 0.1):
         schedule.update({
-          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_latents': 10}
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': 10}
         })
       schedule.update({
-        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_latents': 10},
-        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_latents': 10},
-        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_latents': 10},
+        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_encodings': 10},
+        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_encodings': 10},
+        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_encodings': 10},
       })
 
     position_gen = np.random.RandomState(seed)
     alpha_gen = np.random.RandomState(seed)
+    audio_choice_gen = np.random.RandomState(seed)
+
+    out_dict = dict.fromkeys([ "motion_name_enc", "target", "audio_input" ])
+    out_dict["target"] = targets # retaining the key verbatim for compatibility with rest of pipeline (e.g. loss fns)
 
     for keys, vdict in schedule.items():
       blend_num = keys.blend_num
-      num_latents = vdict['num_latents']
+      num_encodings = vdict['num_encodings']
 
       if blend_num == 1:
         # pure primitives - cycle through in order to learn them first
-        for ctr in range(num_latents):
+        for ctr in range(num_encodings):
           pos = ctr % num_primitives
-          res = tf.one_hot(pos, depth=num_primitives)
-          # tf.print(res)
-          yield res
+          encoding_vec = tf.one_hot(pos, depth=num_primitives)
+
+          out_dict["motion_name_enc"] = encoding_vec
+          out_dict["audio_input"] = audios[pos]
+          yield out_dict
 
       else:
         alpha_max = keys.alpha_max
 
-        for ctr in range(num_latents):
+        for ctr in range(num_encodings):
           alphas = alpha_gen.uniform(low=0.0, high=alpha_max, size=(blend_num-1,))
           alphas = np.concatenate([alphas, 1.0 - np.sum(alphas,keepdims=True)], axis=-1)
 
           positions = position_gen.choice(num_primitives, size=(blend_num,), replace=False)
 
-          res = np.zeros(shape=(num_primitives,))
-          res[positions] = alphas
-          # tf.print(tf.convert_to_tensor(res))
-          yield tf.convert_to_tensor(res)
+          encoding_vec = np.zeros(shape=(num_primitives,))
+          encoding_vec[positions] = alphas
+          encoding_vec = tf.convert_to_tensor(encoding_vec)
+
+          audio_choice = audio_choice_gen.choice(positions, size=1)
+          audio_input = audios[audio_choice]
+
+          out_dict["motion_name_enc"] = encoding_vec
+          out_dict["audio_input"] = audio_input
+          yield out_dict
 
 
-  latent_based_ds = tf.data.Dataset.from_generator(
-    latent_generator,
-    args=[num_clips, random_latent_seed, is_training],
-    output_signature=tf.TensorSpec(shape=(num_clips,), dtype=tf.float32)
-  )
-  latent_based_ds = latent_based_ds.map(
-    lambda latent: {
-      "motion_name_enc": latent,
-      "audio_input": audio_input,
-      "target": targets,  # retaining the key verbatim for compatibility with rest of pipeline (e.g. loss fns)
-    },
-    num_parallel_calls=num_parallel_calls
-  )
+  encoding_based_ds = tf.data.Dataset.from_generator(
+    encoding_generator,
+    args=[num_clips, targets, audios, random_encoding_seed, is_training],
+    output_signature={
+      "motion_name_enc": tf.TensorSpec(shape=(num_clips,), dtype=tf.float32),
+      "target": tf.TensorSpec(shape=targets.shape, dtype=tf.float32),
+      "audio_input": tf.TensorSpec(shape=audio_input_shape, dtype=tf.float32)
+    })
 
   del clip_based_ds
-  return latent_based_ds
+  return encoding_based_ds

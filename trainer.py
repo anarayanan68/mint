@@ -50,8 +50,8 @@ flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not p
 flags.DEFINE_string('name_enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
 flags.DEFINE_integer(
-    'random_latent_seed', None,
-    'Random seed int >= 0, to create random latents. No such latents generated if not passed.',
+    'random_encoding_seed', None,
+    'Random seed int >= 0, to create random encodings. No such encodings generated if not passed.',
     lower_bound=0)
 
 def _create_learning_rate(learning_rate_config):
@@ -104,7 +104,7 @@ def _create_learning_rate(learning_rate_config):
   return lr_schedule
 
 
-def get_dataset_fn(configs, random_latent_seed=None):
+def get_dataset_fn(configs, random_encoding_seed=None):
   """Returns tf dataset."""
 
   def dataset_fn(input_context=None):
@@ -116,7 +116,7 @@ def get_dataset_fn(configs, random_latent_seed=None):
         train_config, train_dataset_config,
         use_tpu=use_tpu,
         overfit_expt=FLAGS.overfit_expt,
-        random_latent_seed=random_latent_seed)
+        random_encoding_seed=random_encoding_seed)
     return dataset
 
   return dataset_fn
@@ -155,7 +155,7 @@ def train():
   train_config = configs['train_config']
 
   strategy = distribution_strategy()
-  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, FLAGS.random_latent_seed))
+  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, FLAGS.random_encoding_seed))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
       name_encoder_config_yaml=name_enc_config_yaml, dataset_config=configs['train_dataset'])

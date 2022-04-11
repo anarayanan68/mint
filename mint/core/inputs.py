@@ -23,7 +23,7 @@ def create_input(train_eval_config,
                  is_training=True,
                  use_tpu=False,
                  overfit_expt=False,
-                 random_latent_seed=None):
+                 random_encoding_seed=None):
   """Create batched input data.
 
   Args:
@@ -33,7 +33,7 @@ def create_input(train_eval_config,
     is_training: Whether this is training stage.
     use_tpu: Whether or not provide inputs for TPU.
     overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
-    random_latent_seed: Random seed used to generate (interpolated) inputs
+    random_encoding_seed: Random seed used to generate (interpolated) inputs
 
   Returns:
     ds: A tf.data.Dataset, with the following features:
@@ -122,9 +122,8 @@ def create_input(train_eval_config,
             inputs_util.preprocess_labels, dataset_config=dataset_config),
         num_parallel_calls=num_cpu_threads)
 
-  # Convert dataset from clip-based to latent-based
-  ds = inputs_util.compute_latent_based_dataset(ds, random_latent_seed,
-      is_training=is_training, num_parallel_calls=num_cpu_threads)
+  # Convert dataset from clip-based to encoding-based
+  ds = inputs_util.compute_encoding_based_dataset(ds, random_encoding_seed, is_training=is_training)
 
   if is_training:
     # For training, we want shuffling; not so for eval.

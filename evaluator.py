@@ -45,8 +45,8 @@ flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next check
 flags.DEFINE_string('name_enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
 flags.DEFINE_integer(
-    'random_latent_seed', None,
-    'Random seed int >= 0, to create random latents. No such latents generated if not passed.',
+    'random_encoding_seed', None,
+    'Random seed int >= 0, to create random encodings. No such encodings generated if not passed.',
     lower_bound=0)
 
 def evaluate():
@@ -63,7 +63,7 @@ def evaluate():
       is_training=False,
       use_tpu=False,
       overfit_expt=FLAGS.overfit_expt,
-      random_latent_seed=FLAGS.random_latent_seed)
+      random_encoding_seed=FLAGS.random_encoding_seed)
 
   model_ = model_builder.build(model_config, True, name_encoder_config_yaml=name_enc_config_yaml, dataset_config=eval_dataset_config)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
