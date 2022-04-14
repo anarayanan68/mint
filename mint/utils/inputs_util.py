@@ -130,10 +130,17 @@ def fact_preprocessing_overfit(example, modality_to_params, is_training):
 
   del example["motion_sequence"]
 
-  # audio input: [start, start + audio_input_length)
-  example["audio_input"] = example["audio_sequence"][start:start +
-                                                    audio_input_length, :]
-  example["audio_input"].set_shape([audio_input_length, audio_dim])
+  ## OLD
+  ## audio input: [start, start + audio_input_length)
+  # example["audio_input"] = example["audio_sequence"][start:start +
+  #                                                   audio_input_length, :]
+  ## NEW
+  # audio input: [start + shift, start + shift + motion_target_length)
+  example["audio_input"] = example["audio_sequence"][start +
+                                                      motion_target_shift:start +
+                                                      motion_target_shift +
+                                                      motion_target_length, :]
+  example["audio_input"].set_shape([motion_target_length, audio_dim])
 
   del example["audio_sequence"]
 
