@@ -82,6 +82,8 @@ class Attention(tf.keras.Model):
     dots = tf.einsum("bhid,bhjd->bhij", q, k) * self.scale
     attn = tf.nn.softmax(dots, axis=-1)
 
+    self.attn = attn
+
     out = tf.einsum("bhij,bhjd->bhid", attn, v)
     out = self.rearrange_out(out)
     out = self.to_out(out)
