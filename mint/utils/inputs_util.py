@@ -192,12 +192,12 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
       }
       for alpha_max in np.arange(0.1, 0.55, 0.1):
         schedule.update({
-          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': 10, 'cycle_audios': True}
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': 10, 'cycle_audios': False}
         })
       schedule.update({
-        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_encodings': 10, 'cycle_audios': True},
-        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_encodings': 10, 'cycle_audios': True},
-        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_encodings': 10, 'cycle_audios': True},
+        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_encodings': 10, 'cycle_audios': False},
+        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_encodings': 10, 'cycle_audios': False},
+        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_encodings': 10, 'cycle_audios': False},
       })
 
     position_gen = np.random.RandomState(seed)
@@ -235,7 +235,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
           encoding_vec[positions] = alphas
           encoding_vec = tf.convert_to_tensor(encoding_vec)
 
-          if 'cycle_audios' in vdict:
+          if 'cycle_audios' in vdict and vdict['cycle_audios']:
             # cycle through all audios
             for audio_choice in range(num_primitives):
               audio_input = audios[audio_choice]
