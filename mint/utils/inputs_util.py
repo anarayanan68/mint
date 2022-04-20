@@ -192,12 +192,12 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
       }
       for alpha_max in np.arange(0.1, 0.55, 0.1):
         schedule.update({
-          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': 10}
+          ScheduleKeys(blend_num=2, alpha_max=alpha_max): {'num_encodings': 10, 'cycle_audios': True}
         })
       schedule.update({
-        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_encodings': 10},
-        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_encodings': 10},
-        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_encodings': 10},
+        ScheduleKeys(blend_num=3, alpha_max=0.3): {'num_encodings': 10, 'cycle_audios': True},
+        ScheduleKeys(blend_num=4, alpha_max=0.25): {'num_encodings': 10, 'cycle_audios': True},
+        ScheduleKeys(blend_num=5, alpha_max=0.2): {'num_encodings': 10, 'cycle_audios': True},
       })
 
     position_gen = np.random.RandomState(seed)
@@ -235,14 +235,25 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
           encoding_vec[positions] = alphas
           encoding_vec = tf.convert_to_tensor(encoding_vec)
 
-          audio_choice = audio_choice_gen.choice(positions)
-          audio_input = audios[audio_choice]
-          audio_name = audio_names[audio_choice]
+          if 'cycle_audios' in vdict:
+            # cycle through all audios
+            for audio_choice in range(num_primitives):
+              audio_input = audios[audio_choice]
+              audio_name = audio_names[audio_choice]
 
-          out_dict["motion_name_enc"] = encoding_vec
-          out_dict["audio_input"] = audio_input
-          out_dict["audio_name"] = audio_name
-          yield out_dict
+              out_dict["motion_name_enc"] = encoding_vec
+              out_dict["audio_input"] = audio_input
+              out_dict["audio_name"] = audio_name
+              yield out_dict
+          else:
+            audio_choice = audio_choice_gen.choice(positions)
+            audio_input = audios[audio_choice]
+            audio_name = audio_names[audio_choice]
+
+            out_dict["motion_name_enc"] = encoding_vec
+            out_dict["audio_input"] = audio_input
+            out_dict["audio_name"] = audio_name
+            yield out_dict
 
 
   encoding_based_ds = tf.data.Dataset.from_generator(
