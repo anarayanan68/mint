@@ -5,8 +5,50 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, initializers, regularizers
 
-from mint.core import fact_model, base_model_util
+from mint.core import fact_model, base_model_util, base_models
 from mint.utils import inputs_util
+
+
+class AudioToBlendVec(keras.Model):
+    def __init__(self, num_primitives, config_dict, name="AudioToBlendVec", **kwargs):
+        super(AudioToBlendVec, self).__init__(name=name, **kwargs)
+
+        self.num_primitives = num_primitives
+
+        transformer_config_yaml = config_dict['transformer']
+        self.transformer = base_models.Transformer(
+            hidden_size=transformer_config_yaml['hidden_size'],
+            num_hidden_layers=transformer_config_yaml['num_hidden_layers'],
+            num_attention_heads=transformer_config_yaml['num_attention_heads'],
+            intermediate_size=transformer_config_yaml['intermediate_size']
+        )
+        self.audio_pos_embedding = base_models.PositionEmbedding(
+            transformer_config_yaml['sequence_length'],
+            transformer_config_yaml['hidden_size'])
+        self.audio_linear_embedding = base_models.LinearEmbedding(
+            transformer_config_yaml['hidden_size'])
+
+        output_block_config_yaml = config_dict['output_block']
+        self.output_block = keras.Sequential([
+            layers.GlobalAveragePooling1D(),
+            base_models.MLP(out_dim=num_primitives, hidden_dim=output_block_config_yaml['hidden_dim']),
+            layers.Softmax()
+        ])
+
+
+    def call(self, audio_seq):
+        # audio_seq shape: (batch_size, seq_len, input_feature_dim)
+        audio_features = self.audio_linear_embedding(audio_seq)
+
+        # audio_features shape: (batch_size, seq_len, transformer_hidden_size)
+        audio_features = self.audio_pos_embedding(audio_features)
+        audio_features = self.transformer(audio_features)
+
+        # audio_features shape: (batch_size, seq_len, transformer_hidden_size)
+        out_vec = self.output_block(audio_features)
+
+        # out_vec shape: (batch_size, num_primitives)
+        return out_vec
 
 
 class BlendVecToSeq(keras.Model):
@@ -46,11 +88,15 @@ class EncFACTJointModel(keras.Model):
     def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="EncFACTJointModel", **kwargs):
         super(EncFACTJointModel, self).__init__(name=name, **kwargs)
 
-        self.fact_stage = fact_model.FACTModel(fact_config, is_training)
-        self.enc_stage = BlendVecToSeq(
+        self.audio_to_blend_vec_stage = AudioToBlendVec(
+            num_primitives=encoder_config_yaml['num_primitives'],
+            config_dict=encoder_config_yaml['audio_to_blend_vec'],
+        )
+        self.blend_vec_to_seq_stage = BlendVecToSeq(
             num_primitives=encoder_config_yaml['num_primitives'],
             config_dict=encoder_config_yaml['blend_vec_to_seq'],
         )
+        self.fact_stage = fact_model.FACTModel(fact_config, is_training)
 
         self.modality_to_params = inputs_util.get_modality_to_param_dict(dataset_config)
 
@@ -65,16 +111,17 @@ class EncFACTJointModel(keras.Model):
         # so-called "motion input": [start, start + motion_input_length) but derived from encoding
         # key left unchanged for compatibility with model code
         inputs["motion_input"] = inputs["motion_enc_seq"][:,
-                                                                start:start +
-                                                                motion_input_length, :]
+                                                            start:start +
+                                                            motion_input_length, :]
         inputs["motion_input"].set_shape([inputs["motion_input"].shape[0], motion_input_length, motion_dim])
 
         del inputs["motion_enc_seq"]
 
 
     def call(self, inputs):
-        vec = inputs['motion_enc']
-        seq = self.enc_stage(vec)
+        audio_input = inputs['audio_input']
+        vec = self.audio_to_blend_vec_stage(audio_input)
+        seq = self.blend_vec_to_seq_stage(vec)
         inputs['motion_enc_seq'] = seq
 
         self.middle_processing(inputs)

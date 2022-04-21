@@ -1,6 +1,6 @@
 num_primitives: 10
 
-audio_to_blend:
+audio_to_blend_vec:
   transformer:
     sequence_length: 60
     hidden_size: 256
