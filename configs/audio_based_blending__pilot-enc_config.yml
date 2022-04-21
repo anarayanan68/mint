@@ -1,0 +1,15 @@
+num_primitives: 10
+
+audio_to_blend:
+  transformer:
+    sequence_length: 60
+    hidden_size: 256
+    num_hidden_layers: 1
+    num_attention_heads: 8
+    intermediate_size: 1024
+  output_block:
+    hidden_dim: 256
+
+blend_vec_to_seq:
+  target_shape: "120,147"
+  wt_seed: 101

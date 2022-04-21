@@ -22,7 +22,7 @@ def _build_fact_model(model_config, is_training, encoder_config_yaml=None, datas
   if encoder_config_yaml is None:
     model = fact_model.FACTModel(model_config.fact_model, is_training)
   else:
-    model = primitive_models.NameFACTJointModel(model_config.fact_model, is_training, encoder_config_yaml, dataset_config)
+    model = primitive_models.EncFACTJointModel(model_config.fact_model, is_training, encoder_config_yaml, dataset_config)
   return model
 
 

@@ -10,14 +10,15 @@ from mint.utils import inputs_util
 
 
 class BlendVecToSeq(keras.Model):
-    def __init__(self, num_primitives, target_shape, wt_seed, name="BlendVecToSeq", **kwargs):
+    def __init__(self, num_primitives, config_dict, name="BlendVecToSeq", **kwargs):
         super(BlendVecToSeq, self).__init__(name=name, **kwargs)
 
         self.num_primitives = num_primitives
-        self.target_shape = target_shape
-        self.wt_seed = wt_seed
+        
+        self.target_shape = tuple((int(x) for x in config_dict['target_shape'].split(',')))
+        self.wt_seed = config_dict['wt_seed']
 
-        prod_target_shape = np.prod(target_shape)
+        prod_target_shape = np.prod(self.target_shape)
         initializer = initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
         regularizer = regularizers.L2(l2=1e-3)
         self.embedding = layers.Embedding(num_primitives, prod_target_shape,
@@ -41,15 +42,14 @@ class BlendVecToSeq(keras.Model):
         return tf.reshape(res, (batch_size,) + self.target_shape)
 
 
-class NameFACTJointModel(keras.Model):
-    def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="NameFACTJointModel", **kwargs):
-        super(NameFACTJointModel, self).__init__(name=name, **kwargs)
+class EncFACTJointModel(keras.Model):
+    def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="EncFACTJointModel", **kwargs):
+        super(EncFACTJointModel, self).__init__(name=name, **kwargs)
 
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)
         self.enc_stage = BlendVecToSeq(
             num_primitives=encoder_config_yaml['num_primitives'],
-            target_shape=tuple((int(x) for x in encoder_config_yaml['target_shape'].split(','))),
-            wt_seed=encoder_config_yaml['wt_seed'],
+            config_dict=encoder_config_yaml['blend_vec_to_seq'],
         )
 
         self.modality_to_params = inputs_util.get_modality_to_param_dict(dataset_config)
