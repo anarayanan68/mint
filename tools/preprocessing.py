@@ -69,14 +69,14 @@ def write_tfexample(writers, tf_example):
     writers[random_writer_idx].write(tf_example.SerializeToString())
 
 
-def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_name_enc, audio_name):
+def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_enc, audio_name):
     features = dict()
     features['motion_name'] = tf.train.Feature(
         bytes_list=tf.train.BytesList(value=[motion_name.encode('utf-8')]))
 
-    if motion_name_enc is not None:
-        features['motion_name_enc'] = tf.train.Feature(
-            float_list=tf.train.FloatList(value=motion_name_enc.flatten()))
+    if motion_enc is not None:
+        features['motion_enc'] = tf.train.Feature(
+            float_list=tf.train.FloatList(value=motion_enc.flatten()))
 
     features['motion_sequence'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=motion_sequence.flatten()))
@@ -249,10 +249,10 @@ def main(_):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
         motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-        seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
+        seq_enc = get_encoded_input(seq_name, enc_pkl_data)
         audio_seq, audio_name = load_cached_audio_features(seq_name)
 
-        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
+        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_enc, audio_name)
         write_tfexample(tfrecord_writers, tfexample)
 
     # If testval, also test on un-paired data
@@ -262,10 +262,10 @@ def main(_):
             logging.info("processing %d / %d" % (i + 1, n_samples * 10))
 
             motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-            seq_name_enc = get_encoded_input(seq_name, enc_pkl_data)
+            seq_enc = get_encoded_input(seq_name, enc_pkl_data)
             audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
-            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_name_enc, audio_name)
+            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_enc, audio_name)
             write_tfexample(tfrecord_writers, tfexample)
     
     close_tfrecord_writers(tfrecord_writers)

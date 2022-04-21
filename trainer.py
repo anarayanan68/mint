@@ -47,7 +47,7 @@ flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
 flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
-flags.DEFINE_string('name_enc_cfg_yaml_path', None,
+flags.DEFINE_string('enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
 flags.DEFINE_integer(
     'random_encoding_seed', None,
@@ -149,7 +149,7 @@ def distribution_strategy():
 def train():
   """Trains model."""
   configs = config_util.get_configs_from_pipeline_file(FLAGS.config_path)
-  name_enc_config_yaml = config_util.read_yaml_config(FLAGS.name_enc_cfg_yaml_path) # None case handled here
+  enc_config_yaml = config_util.read_yaml_config(FLAGS.enc_cfg_yaml_path) # None case handled here
   
   model_config = configs['model']
   train_config = configs['train_config']
@@ -158,7 +158,7 @@ def train():
   dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, FLAGS.random_encoding_seed))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
-      name_encoder_config_yaml=name_enc_config_yaml, dataset_config=configs['train_dataset'])
+      encoder_config_yaml=enc_config_yaml, dataset_config=configs['train_dataset'])
     lr_schedule = _create_learning_rate(train_config.learning_rate)
     optimizer = tf.keras.optimizers.Adam(lr_schedule)
     model_.global_step = optimizer.iterations

@@ -154,14 +154,14 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
   sample_data = next(iter(clip_based_ds))
   audio_input_shape = sample_data["audio_input"].shape
 
-  num_clips = sample_data["motion_name_enc"].shape[-1]
+  num_clips = sample_data["motion_enc"].shape[-1]
   targets = [None] * num_clips
   audios = [None] * num_clips
   audio_names = [None] * num_clips
   num_found = 0
 
   for example in clip_based_ds:
-    enc = example["motion_name_enc"]
+    enc = example["motion_enc"]
     idx = tf.argmax(enc)  # find the single "hot" index
 
     if targets[idx] is None:
@@ -204,7 +204,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
     alpha_gen = np.random.RandomState(seed)
     audio_choice_gen = np.random.RandomState(seed)
 
-    out_dict = dict.fromkeys([ "motion_name_enc", "target", "audio_input", "audio_name" ])
+    out_dict = dict.fromkeys([ "motion_enc", "target", "audio_input", "audio_name" ])
     out_dict["target"] = targets # retaining the key verbatim for compatibility with rest of pipeline (e.g. loss fns)
 
     for keys, vdict in schedule.items():
@@ -217,7 +217,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
           pos = ctr % num_primitives
           encoding_vec = tf.one_hot(pos, depth=num_primitives)
 
-          out_dict["motion_name_enc"] = encoding_vec
+          out_dict["motion_enc"] = encoding_vec
           out_dict["audio_input"] = audios[pos]
           out_dict["audio_name"] = audio_names[pos]
           yield out_dict
@@ -241,7 +241,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
               audio_input = audios[audio_choice]
               audio_name = audio_names[audio_choice]
 
-              out_dict["motion_name_enc"] = encoding_vec
+              out_dict["motion_enc"] = encoding_vec
               out_dict["audio_input"] = audio_input
               out_dict["audio_name"] = audio_name
               yield out_dict
@@ -250,7 +250,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
             audio_input = audios[audio_choice]
             audio_name = audio_names[audio_choice]
 
-            out_dict["motion_name_enc"] = encoding_vec
+            out_dict["motion_enc"] = encoding_vec
             out_dict["audio_input"] = audio_input
             out_dict["audio_name"] = audio_name
             yield out_dict
@@ -260,7 +260,7 @@ def compute_encoding_based_dataset(clip_based_ds: tf.data.Dataset,
     encoding_generator,
     args=[num_clips, targets, audios, audio_names, random_encoding_seed, is_training],
     output_signature={
-      "motion_name_enc": tf.TensorSpec(shape=(num_clips,), dtype=tf.float32),
+      "motion_enc": tf.TensorSpec(shape=(num_clips,), dtype=tf.float32),
       "target": tf.TensorSpec(shape=targets.shape, dtype=tf.float32),
       "audio_input": tf.TensorSpec(shape=audio_input_shape, dtype=tf.float32),
       "audio_name": tf.TensorSpec(shape=(), dtype=tf.string),

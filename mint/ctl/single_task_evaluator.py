@@ -99,14 +99,14 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
         os.makedirs(self.output_dir, exist_ok=True)
         self.targets = inputs["target"][0].numpy() # [0] for first in batch - all entries in all inputs are same for this
 
-      self.all_inputs.append(inputs["motion_name_enc"])
+      self.all_inputs.append(inputs["motion_enc"])
       batch_size = tf.shape(outputs)[0]
       if self.output_dir is not None:
         os.makedirs(self.output_dir, exist_ok=True)
         # save each batch instance seperately
         for i in range(batch_size):
           output = outputs[i].numpy()
-          vec = inputs["motion_name_enc"][i].numpy()
+          vec = inputs["motion_enc"][i].numpy()
           fname = '_+_'.join([
             f"{vi:0.3f}x_P{i:02d}"
             for i,vi in zip(vec.nonzero()[0], vec[vec.nonzero()])

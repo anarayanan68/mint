@@ -46,7 +46,7 @@ class NameFACTJointModel(keras.Model):
         super(NameFACTJointModel, self).__init__(name=name, **kwargs)
 
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)
-        self.name_enc_stage = Vec2SeqEncoder(
+        self.enc_stage = Vec2SeqEncoder(
             num_primitives=encoder_config_yaml['num_primitives'],
             target_shape=tuple((int(x) for x in encoder_config_yaml['target_shape'].split(','))),
             wt_seed=encoder_config_yaml['wt_seed'],
@@ -64,18 +64,18 @@ class NameFACTJointModel(keras.Model):
         start = 0
         # so-called "motion input": [start, start + motion_input_length) but derived from encoding
         # key left unchanged for compatibility with model code
-        inputs["motion_input"] = inputs["motion_name_enc_seq"][:,
+        inputs["motion_input"] = inputs["motion_enc_seq"][:,
                                                                 start:start +
                                                                 motion_input_length, :]
         inputs["motion_input"].set_shape([inputs["motion_input"].shape[0], motion_input_length, motion_dim])
 
-        del inputs["motion_name_enc_seq"]
+        del inputs["motion_enc_seq"]
 
 
     def call(self, inputs):
-        vec = inputs['motion_name_enc']
-        seq = self.name_enc_stage(vec)
-        inputs['motion_name_enc_seq'] = seq
+        vec = inputs['motion_enc']
+        seq = self.enc_stage(vec)
+        inputs['motion_enc_seq'] = seq
 
         self.middle_processing(inputs)
         return self.fact_stage(inputs)
@@ -92,7 +92,7 @@ class NameFACTJointModel(keras.Model):
         #     -> will be sliced to match sequence lengths, and broadcasted to align with targets
         #
         # also use input latents of shape (batch_size, latent_dim) to weigh the losses w.r.t each target
-        in_latents = inputs["motion_name_enc"]
+        in_latents = inputs["motion_enc"]
         diff = target_tensors - pred_tensors[:, None, :target_seq_len]
 
         # Loss is first averaged over the sequence and feature dimensions

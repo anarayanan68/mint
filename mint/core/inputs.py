@@ -64,7 +64,7 @@ def create_input(train_eval_config,
 
   if overfit_expt:
     name_to_features.update({
-        "motion_name_enc": tf.io.VarLenFeature(tf.float32),
+        "motion_enc": tf.io.VarLenFeature(tf.float32),
     })
 
   # For training, we want a lot of parallel reading.
@@ -98,7 +98,7 @@ def create_input(train_eval_config,
           example[f"{modality}_sequence_shape"])
 
     if overfit_expt:
-      example["motion_name_enc"] = tf.sparse.to_dense(example["motion_name_enc"])
+      example["motion_enc"] = tf.sparse.to_dense(example["motion_enc"])
 
     return example
 
