@@ -12,4 +12,3 @@ audio_to_blend_vec:
 
 blend_vec_to_seq:
   target_shape: "120,147"
-  wt_seed: 101

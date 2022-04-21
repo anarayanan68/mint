@@ -58,7 +58,6 @@ class BlendVecToSeq(keras.Model):
         self.num_primitives = num_primitives
         
         self.target_shape = tuple((int(x) for x in config_dict['target_shape'].split(',')))
-        self.wt_seed = config_dict['wt_seed']
 
         prod_target_shape = np.prod(self.target_shape)
         initializer = initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
