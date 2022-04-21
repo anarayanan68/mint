@@ -9,9 +9,9 @@ from mint.core import fact_model, base_model_util
 from mint.utils import inputs_util
 
 
-class Vec2SeqEncoder(keras.Model):
-    def __init__(self, num_primitives, target_shape, wt_seed, name="Vec2SeqEncoder", **kwargs):
-        super(Vec2SeqEncoder, self).__init__(name=name, **kwargs)
+class BlendToSeqEncoder(keras.Model):
+    def __init__(self, num_primitives, target_shape, wt_seed, name="BlendToSeqEncoder", **kwargs):
+        super(BlendToSeqEncoder, self).__init__(name=name, **kwargs)
 
         self.num_primitives = num_primitives
         self.target_shape = target_shape
@@ -46,7 +46,7 @@ class NameFACTJointModel(keras.Model):
         super(NameFACTJointModel, self).__init__(name=name, **kwargs)
 
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)
-        self.enc_stage = Vec2SeqEncoder(
+        self.enc_stage = BlendToSeqEncoder(
             num_primitives=encoder_config_yaml['num_primitives'],
             target_shape=tuple((int(x) for x in encoder_config_yaml['target_shape'].split(','))),
             wt_seed=encoder_config_yaml['wt_seed'],
