@@ -45,14 +45,9 @@ flags.DEFINE_integer('warmup_steps', None,
                      'Number of learning rate warmup steps')
 flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
-flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
 flags.DEFINE_string('enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
-flags.DEFINE_integer(
-    'random_encoding_seed', None,
-    'Random seed int >= 0, to create random encodings. No such encodings generated if not passed.',
-    lower_bound=0)
 
 def _create_learning_rate(learning_rate_config):
   """Create optimizer learning rate based on config.
@@ -104,7 +99,7 @@ def _create_learning_rate(learning_rate_config):
   return lr_schedule
 
 
-def get_dataset_fn(configs, random_encoding_seed=None):
+def get_dataset_fn(configs):
   """Returns tf dataset."""
 
   def dataset_fn(input_context=None):
@@ -114,9 +109,7 @@ def get_dataset_fn(configs, random_encoding_seed=None):
     use_tpu = (FLAGS.train_strategy == TRAIN_STRATEGY[0])
     dataset = inputs.create_input(
         train_config, train_dataset_config,
-        use_tpu=use_tpu,
-        overfit_expt=FLAGS.overfit_expt,
-        random_encoding_seed=random_encoding_seed)
+        use_tpu=use_tpu)
     return dataset
 
   return dataset_fn
@@ -155,7 +148,7 @@ def train():
   train_config = configs['train_config']
 
   strategy = distribution_strategy()
-  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, FLAGS.random_encoding_seed))
+  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
       encoder_config_yaml=enc_config_yaml, dataset_config=configs['train_dataset'])

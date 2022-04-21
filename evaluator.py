@@ -40,14 +40,9 @@ flags.DEFINE_float('initial_learning_rate', 0.1, 'UNUSED FLAG.')
 flags.DEFINE_float('weight_decay', None, 'UNUSED FLAG.')
 flags.DEFINE_string('head_initializer', 'he_normal',
                     'Initializer for prediction head.')
-flags.DEFINE_bool('overfit_expt', False, 'Whether running the overfit experiment or not (which controls a few important settings).')
 flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next checkpoint, as per tf.train.checkpoints_iterator. Pass a small value to run once and exit.')
 flags.DEFINE_string('enc_cfg_yaml_path', None,
                     'Path to YAML config file for the name encoder network.')
-flags.DEFINE_integer(
-    'random_encoding_seed', None,
-    'Random seed int >= 0, to create random encodings. No such encodings generated if not passed.',
-    lower_bound=0)
 
 def evaluate():
   """Evaluates the given model."""
@@ -61,9 +56,7 @@ def evaluate():
       train_eval_config=eval_config,
       dataset_config=eval_dataset_config,
       is_training=False,
-      use_tpu=False,
-      overfit_expt=FLAGS.overfit_expt,
-      random_encoding_seed=FLAGS.random_encoding_seed)
+      use_tpu=False)
 
   model_ = model_builder.build(model_config, True, encoder_config_yaml=enc_config_yaml, dataset_config=eval_dataset_config)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
@@ -72,8 +65,7 @@ def evaluate():
       dataset,
       model=model_,
       metrics=metrics_,
-      output_dir=FLAGS.output_dir,
-      overfit_expt=FLAGS.overfit_expt)
+      output_dir=FLAGS.output_dir)
 
   controller = orbit.Controller(
       evaluator=evaluator,

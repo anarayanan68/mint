@@ -21,9 +21,7 @@ def create_input(train_eval_config,
                  dataset_config,
                  num_cpu_threads=2,
                  is_training=True,
-                 use_tpu=False,
-                 overfit_expt=False,
-                 random_encoding_seed=None):
+                 use_tpu=False):
   """Create batched input data.
 
   Args:
@@ -32,8 +30,6 @@ def create_input(train_eval_config,
     num_cpu_threads: Number of cpu threads for dataset reading.
     is_training: Whether this is training stage.
     use_tpu: Whether or not provide inputs for TPU.
-    overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
-    random_encoding_seed: Random seed used to generate (interpolated) inputs
 
   Returns:
     ds: A tf.data.Dataset, with the following features:
@@ -100,7 +96,7 @@ def create_input(train_eval_config,
   for da_step_config in dataset_config.data_augmentation_options:
     da_step_type = da_step_config.WhichOneof("preprocessor")
     if da_step_type == "fact_preprocessor":
-      preproc_fn = inputs_util.fact_preprocessing_overfit if overfit_expt else inputs_util.fact_preprocessing
+      preproc_fn = inputs_util.fact_preprocessing
       ds = ds.map(
           functools.partial(
               preproc_fn,
@@ -114,12 +110,9 @@ def create_input(train_eval_config,
             inputs_util.preprocess_labels, dataset_config=dataset_config),
         num_parallel_calls=num_cpu_threads)
 
-  # Convert dataset from clip-based to encoding-based
-  ds = inputs_util.compute_encoding_based_dataset(ds, random_encoding_seed, is_training=is_training)
-
   if is_training:
     # For training, we want shuffling; not so for eval.
-    # ds = ds.shuffle(100).repeat()
+    ds = ds.shuffle(100).repeat()
     ds = ds.repeat()
   else:
     # Since we evaluate for a fixed number of steps we don't want to encounter

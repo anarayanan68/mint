@@ -31,8 +31,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
                model,
                metrics,
                output_dir=None,
-               evaluator_options=None,
-               overfit_expt=False):
+               evaluator_options=None):
     """Initializes a `SingleTaskEvaluator` instance.
 
     If the `SingleTaskEvaluator` should run its model under a distribution
@@ -46,13 +45,11 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
         `tf.keras.metrics.Metric` objects.
       evaluator_options: An optional `orbit.StandardEvaluatorOptions` object.
       output_dir: Folder to write output motions to. Motions won't be written if this is not given.
-      overfit_expt: Whether running the overfit experiment or not (which controls a few important settings)
     """
 
     self.model = model
     self.metrics = metrics if isinstance(metrics, list) else [metrics]
     self.output_dir = output_dir
-    self.overfit_expt = overfit_expt
 
     # Capture the strategy from the containing scope.
     self.strategy = tf.distribute.get_strategy()
@@ -91,7 +88,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
     
-    def step_fn_overfit(inputs):
+    def step_fn_direct(inputs):
       # [batch_size, target_length, motion_feature_dimension]
       outputs = self.model(inputs)[:, :inputs["target"].shape[-2]]
       
@@ -121,10 +118,7 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
         metric.update_state(inputs, outputs)
       
     # This is needed to handle distributed computation.
-    self.strategy.run(
-      step_fn_overfit if self.overfit_expt else step_fn_autoregressive,
-      args=(next(iterator),)
-    )
+    self.strategy.run(step_fn_direct, args=(next(iterator),))
 
 
   def eval_end(self):
