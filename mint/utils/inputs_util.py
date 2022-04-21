@@ -59,7 +59,7 @@ def preprocess_labels(example, dataset_config):
   return example
 
 
-def fact_preprocessing(example, modality_to_params, is_training):
+def fact_preprocessing_original(example, modality_to_params, is_training):
   """Preprocess data for FACT model."""
   motion_seq_length = tf.shape(example["motion_sequence"])[0]
   motion_input_length = modality_to_params["motion"]["input_length"]
@@ -110,7 +110,7 @@ def fact_preprocessing(example, modality_to_params, is_training):
   return example
 
 
-def fact_preprocessing_overfit(example, modality_to_params, is_training):
+def fact_preprocessing(example, modality_to_params, is_training):
   motion_seq_length = tf.shape(example["motion_sequence"])[0]
   motion_input_length = modality_to_params["motion"]["input_length"]
   motion_target_length = modality_to_params["motion"]["target_length"]
