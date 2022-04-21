@@ -96,12 +96,12 @@ class NameFACTJointModel(keras.Model):
         diff = target_tensors - pred_tensors[:, None, :target_seq_len]
 
         # Loss is first averaged over the sequence and feature dimensions
-        # IF using Smooth Huber loss:
-        delta = 1.0
-        direct_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1, axis=[-1,-2])
+        # # IF using Smooth Huber loss:
+        # delta = 1.0
+        # direct_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1, axis=[-1,-2])
 
-        # # IF using MSE loss:
-        # direct_loss = tf.reduce_mean(tf.square(diff), axis=[-1,-2])
+        # IF using MSE loss:
+        direct_loss = tf.reduce_mean(tf.square(diff), axis=[-1,-2])
 
         # -> now of shape (batch_size, latent_dim), need to weight and sum over latent dim and then average over batch dim
         blended_loss = tf.reduce_mean(tf.reduce_sum(direct_loss * in_latents, axis=-1))
