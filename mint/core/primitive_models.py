@@ -95,11 +95,14 @@ class NameFACTJointModel(keras.Model):
         in_latents = inputs["motion_name_enc"]
         diff = target_tensors - pred_tensors[:, None, :target_seq_len]
 
-        # delta = 1.0
-        # # Loss is first averaged over the sequence and feature dimensions
-        # smooth_huber_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1, axis=[-1,-2])
+        # Loss is first averaged over the sequence and feature dimensions
+        # IF using Smooth Huber loss:
+        delta = 1.0
+        direct_loss = delta**2 * tf.reduce_mean(tf.sqrt(1.0 + tf.square(diff/delta)) - 1, axis=[-1,-2])
 
-        mse_loss = tf.reduce_mean(tf.square(diff), axis=[-1,-2])
+        # # IF using MSE loss:
+        # direct_loss = tf.reduce_mean(tf.square(diff), axis=[-1,-2])
+
         # -> now of shape (batch_size, latent_dim), need to weight and sum over latent dim and then average over batch dim
-        blended_loss = tf.reduce_mean(tf.reduce_sum(mse_loss * in_latents, axis=-1))
+        blended_loss = tf.reduce_mean(tf.reduce_sum(direct_loss * in_latents, axis=-1))
         return blended_loss
