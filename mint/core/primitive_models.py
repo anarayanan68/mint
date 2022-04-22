@@ -9,23 +9,25 @@ from mint.core import fact_model, base_model_util, base_models
 from mint.utils import inputs_util
 
 
-class AudioToBlendVec(keras.Model):
-    def __init__(self, num_primitives, config_dict, name="AudioToBlendVec", **kwargs):
-        super(AudioToBlendVec, self).__init__(name=name, **kwargs)
+class BlendController(keras.Model):
+    def __init__(self, num_primitives, config_dict, name="BlendController", **kwargs):
+        super(BlendController, self).__init__(name=name, **kwargs)
 
         self.num_primitives = num_primitives
-
+        
         transformer_config_yaml = config_dict['transformer']
+        self.audio_linear_embedding = base_models.LinearEmbedding(
+            transformer_config_yaml['hidden_size'])
+        self.audio_pos_embedding = base_models.PositionEmbedding(
+            transformer_config_yaml['sequence_length'],
+            transformer_config_yaml['hidden_size'])
         self.transformer = base_models.Transformer(
             hidden_size=transformer_config_yaml['hidden_size'],
             num_hidden_layers=transformer_config_yaml['num_hidden_layers'],
             num_attention_heads=transformer_config_yaml['num_attention_heads'],
             intermediate_size=transformer_config_yaml['intermediate_size']
         )
-        self.audio_pos_embedding = base_models.PositionEmbedding(
-            transformer_config_yaml['sequence_length'],
-            transformer_config_yaml['hidden_size'])
-        self.audio_linear_embedding = base_models.LinearEmbedding(
+        self.conditioning_block = base_models.LinearEmbedding(
             transformer_config_yaml['hidden_size'])
 
         output_block_config_yaml = config_dict['output_block']
@@ -36,18 +38,17 @@ class AudioToBlendVec(keras.Model):
         ])
 
 
-    def call(self, audio_seq):
-        # audio_seq shape: (batch_size, seq_len, input_feature_dim)
-        audio_features = self.audio_linear_embedding(audio_seq)
+    def call(self, inputs):
+        audio_seq = inputs['audio_input']                               # (batch_size, seq_len, audio_feature_dim)
+        audio_features = self.audio_linear_embedding(audio_seq)         # (batch_size, seq_len, transformer_hidden_size)
+        audio_features = self.audio_pos_embedding(audio_features)       # (batch_size, seq_len, transformer_hidden_size)
+        audio_features = self.transformer(audio_features)               # (batch_size, seq_len, transformer_hidden_size)
 
-        # audio_features shape: (batch_size, seq_len, transformer_hidden_size)
-        audio_features = self.audio_pos_embedding(audio_features)
-        audio_features = self.transformer(audio_features)
+        conditioning = inputs['conditioning_input']                     # (batch_size, conditioning_input_dim)
+        conditioning_features = self.conditioning_block(conditioning)   # (batch_size, transformer_hidden_size)
 
-        # audio_features shape: (batch_size, seq_len, transformer_hidden_size)
-        out_vec = self.output_block(audio_features)
-
-        # out_vec shape: (batch_size, num_primitives)
+        combined_features = audio_features + conditioning_features      # (batch_size, seq_len, transformer_hidden_size) via broadcasting
+        out_vec = self.output_block(combined_features)                  # (batch_size, num_primitives)
         return out_vec
 
 
@@ -87,11 +88,11 @@ class EncFACTJointModel(keras.Model):
     def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="EncFACTJointModel", **kwargs):
         super(EncFACTJointModel, self).__init__(name=name, **kwargs)
 
-        self.audio_to_blend_vec_stage = AudioToBlendVec(
+        self.blend_controller = BlendController(
             num_primitives=encoder_config_yaml['num_primitives'],
             config_dict=encoder_config_yaml['audio_to_blend_vec'],
         )
-        self.blend_vec_to_seq_stage = BlendVecToSeq(
+        self.blend_vec_to_seq = BlendVecToSeq(
             num_primitives=encoder_config_yaml['num_primitives'],
             config_dict=encoder_config_yaml['blend_vec_to_seq'],
         )
@@ -118,9 +119,8 @@ class EncFACTJointModel(keras.Model):
 
 
     def call(self, inputs):
-        audio_input = inputs['audio_input']
-        vec = self.audio_to_blend_vec_stage(audio_input)
-        seq = self.blend_vec_to_seq_stage(vec)
+        blend_vec = self.blend_controller(inputs)
+        seq = self.blend_vec_to_seq(blend_vec)
         inputs['motion_enc_seq'] = seq
 
         self.middle_processing(inputs)
