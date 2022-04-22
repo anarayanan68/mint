@@ -1,4 +1,4 @@
-num_primitives: 10
+num_primitives: 4
 
 audio_to_blend_vec:
   transformer:

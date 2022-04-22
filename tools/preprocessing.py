@@ -34,18 +34,6 @@ flags.DEFINE_enum(
 flags.DEFINE_string(
     'tfrecord_path', './data/aist_tfrecord', 
     'Output path for the tfrecord files.')
-flags.DEFINE_integer(
-    'random_audio_seed', None,
-    'Random seed int >= 0, to create random audio features. Uses normal audio if not passed.',
-    lower_bound=0)
-flags.DEFINE_string(
-    'enc_pkl_path', None,
-    'Path to pkl file to load/save motion name encoding data (weights etc). Skips encoding if not passed.')
-flags.DEFINE_integer(
-    'subset_size', None,
-    'Int >= 1. If passed, sets the number of sequences (from the start) to actually use for tfrecords. '
-    'All videos are chosen if this is not passed or is higher than the dataset size.',
-    lower_bound=1)
 
 RNG = np.random.RandomState(42)
 
@@ -69,15 +57,11 @@ def write_tfexample(writers, tf_example):
     writers[random_writer_idx].write(tf_example.SerializeToString())
 
 
-def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_enc, audio_name):
+def to_tfexample(motion_sequence, audio_sequence, motion_name, audio_name):
     features = dict()
+
     features['motion_name'] = tf.train.Feature(
         bytes_list=tf.train.BytesList(value=[motion_name.encode('utf-8')]))
-
-    if motion_enc is not None:
-        features['motion_enc'] = tf.train.Feature(
-            float_list=tf.train.FloatList(value=motion_enc.flatten()))
-
     features['motion_sequence'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=motion_sequence.flatten()))
     features['motion_sequence_shape'] = tf.train.Feature(
@@ -88,6 +72,10 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, motion_enc, audio
         float_list=tf.train.FloatList(value=audio_sequence.flatten()))
     features['audio_sequence_shape'] = tf.train.Feature(
         int64_list=tf.train.Int64List(value=audio_sequence.shape))
+
+    features['conditioning_input'] = tf.train.Feature(
+        bytes_list=tf.train.BytesList(value=[motion_name[1:3].encode('utf-8')]))    # just the genre for now
+
     example = tf.train.Example(features=tf.train.Features(feature=features))
     return example
 
@@ -139,9 +127,6 @@ def cache_audio_features(seq_names: list):
             envelope[:, None], mfcc, chroma, peak_onehot[:, None], beat_onehot[:, None]
         ], axis=-1)
 
-        if FLAGS.random_audio_seed is not None:
-            audio_rng = np.random.default_rng(seed=FLAGS.random_audio_seed)
-            audio_feature = audio_rng.uniform(np.min(audio_feature) * 5, np.max(audio_feature) * 5, audio_feature.shape)
         np.save(save_path, audio_feature)
 
 
@@ -157,54 +142,8 @@ def compute_SMPL_motion(seq_name: str, motion_dir: str):
     return smpl_motion
 
 
-def get_onehot_enc_map(seq_names: list):
-    onehot_enc_map = { 'len': len(seq_names) }
-    for i, seq_name in enumerate(seq_names):
-        enc = np.zeros(len(seq_names))
-        enc[i] = 1
-
-        onehot_enc_map[seq_name] = { 'index': i, 'enc': enc }
-
-    return onehot_enc_map
-
-
-def load_enc_pkl(pkl_path: str):
-    res = None
-    if pkl_path is not None and os.path.exists(pkl_path):
-        with open(pkl_path, 'rb') as f:
-            res = pickle.load(f)
-    return res
-
-
-def cache_enc_pkl(pkl_path: str, seq_names: list, latent_seed: int = None):
-    assert len(seq_names) > 0
-
-    onehot_enc_map = get_onehot_enc_map(seq_names)
-    pkl_data = {
-        'onehot_enc_map': onehot_enc_map,
-    }
-
-    with open(pkl_path, 'wb') as f:
-        pickle.dump(pkl_data, f)
-
-
-def get_latent_from_seq_name(seq_name: str, enc_pkl_data: dict):
-    return enc_pkl_data['onehot_enc_map'][seq_name]['enc']
-
-
-def get_encoded_input(seq_name: str, enc_pkl_data: dict):
-    if enc_pkl_data is None:
-        return None
-
-    return get_latent_from_seq_name(seq_name, enc_pkl_data)
-
-
-def main(_):
-    os.makedirs(os.path.dirname(FLAGS.tfrecord_path), exist_ok=True)
-    tfrecord_writers = create_tfrecord_writers(
-        "%s-%s" % (FLAGS.tfrecord_path, FLAGS.split), n_shards=20)
-
-    # create list
+def get_seq_names():
+    global FLAGS
     seq_names = []
     if "train" in FLAGS.split:
         seq_names += np.loadtxt(
@@ -222,7 +161,19 @@ def main(_):
         os.path.join(FLAGS.anno_dir, "ignore_list.txt"), dtype=str
     ).tolist()
     seq_names = [name for name in seq_names if name not in ignore_list]
-    seq_names = seq_names[:FLAGS.subset_size]
+
+    # custom logic for smaller subsets - currently 1 seq per genre, and the seq has to be a basic motion (sBM)
+    seq_names = np.array( list(filter(lambda name: 'sBM' in name, seq_names)) )
+    _, unique_idxs = np.unique([name[1:3] for name in seq_names], return_index=True) # 1:3 - genre abbreviation without the starting 'g'
+    return seq_names[unique_idxs]
+
+
+def main(_):
+    os.makedirs(os.path.dirname(FLAGS.tfrecord_path), exist_ok=True)
+    tfrecord_writers = create_tfrecord_writers(
+        "%s-%s" % (FLAGS.tfrecord_path, FLAGS.split), n_shards=20)
+
+    seq_names = get_seq_names()
 
     # create audio features
     if FLAGS.overwrite_audio_cache or not os.path.isdir(FLAGS.audio_cache_dir):
@@ -236,23 +187,13 @@ def main(_):
     dataset = AISTDataset(FLAGS.anno_dir)
     n_samples = len(seq_names)
 
-    enc_pkl_data = None
-    if FLAGS.enc_pkl_path is not None:
-        if not os.path.exists(FLAGS.enc_pkl_path):
-            cache_enc_pkl(FLAGS.enc_pkl_path, seq_names)
-            print(f"Cached encoding data at {FLAGS.enc_pkl_path}")
-        else:
-            print(f"Used existing encoding data at {FLAGS.enc_pkl_path}")
-        enc_pkl_data = load_enc_pkl(FLAGS.enc_pkl_path)
-
     for i, seq_name in enumerate(seq_names):
         logging.info("processing %d / %d" % (i + 1, n_samples))
 
         motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-        seq_enc = get_encoded_input(seq_name, enc_pkl_data)
         audio_seq, audio_name = load_cached_audio_features(seq_name)
 
-        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_enc, audio_name)
+        tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
         write_tfexample(tfrecord_writers, tfexample)
 
     # If testval, also test on un-paired data
@@ -262,10 +203,9 @@ def main(_):
             logging.info("processing %d / %d" % (i + 1, n_samples * 10))
 
             motion_seq = compute_SMPL_motion(seq_name, dataset.motion_dir)
-            seq_enc = get_encoded_input(seq_name, enc_pkl_data)
             audio_seq, audio_name = load_cached_audio_features(random.choice(seq_names))
 
-            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, seq_enc, audio_name)
+            tfexample = to_tfexample(motion_seq, audio_seq, seq_name, audio_name)
             write_tfexample(tfrecord_writers, tfexample)
     
     close_tfrecord_writers(tfrecord_writers)
