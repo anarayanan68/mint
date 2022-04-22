@@ -58,6 +58,11 @@ def create_input(train_eval_config,
     name_to_features.update(
         {dataset_config.data_target_field: tf.io.VarLenFeature(tf.int64)})
 
+  # conditioning
+  name_to_features.update({
+    'conditioning_input': tf.io.VarLenFeature(tf.float32)
+  })
+
   # For training, we want a lot of parallel reading.
   # For eval, parallel reading doesn't matter.
   if is_training:
