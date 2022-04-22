@@ -60,7 +60,8 @@ def create_input(train_eval_config,
 
   # conditioning
   name_to_features.update({
-    'conditioning_input': tf.io.VarLenFeature(tf.float32)
+    'conditioning_input': tf.io.VarLenFeature(tf.float32),
+    'conditioning_input_shape': tf.io.FixedLenFeature([1], tf.int64)
   })
 
   # For training, we want a lot of parallel reading.
@@ -92,6 +93,10 @@ def create_input(train_eval_config,
       example[f"{modality}_sequence"] = tf.reshape(
           tf.sparse.to_dense(example[f"{modality}_sequence"]),
           example[f"{modality}_sequence_shape"])
+    example['conditioning_input'] = tf.reshape(
+      tf.sparse.to_dense(example['conditioning_input']),
+      example['conditioning_input_shape']
+    )
 
     return example
 

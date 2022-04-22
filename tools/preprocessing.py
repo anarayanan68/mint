@@ -76,7 +76,9 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, audio_name):
     # make conditioning input: [0-1] floats from byte values
     conditioning_input = np.array([float(x)/255 for x in motion_name[1:3].encode('utf-8')]) # just the genre for now
     features['conditioning_input'] = tf.train.Feature(
-        float_list=tf.train.FloatList(value=conditioning_input))
+        float_list=tf.train.FloatList(value=conditioning_input.flatten()))
+    features['conditioning_input_shape'] = tf.train.Feature(
+        int64_list=tf.train.Int64List(value=conditioning_input.shape))
 
     example = tf.train.Example(features=tf.train.Features(feature=features))
     return example
@@ -171,11 +173,11 @@ def get_seq_names():
 
 
 def main(_):
+    seq_names = get_seq_names()
+
     os.makedirs(os.path.dirname(FLAGS.tfrecord_path), exist_ok=True)
     tfrecord_writers = create_tfrecord_writers(
-        "%s-%s" % (FLAGS.tfrecord_path, FLAGS.split), n_shards=20)
-
-    seq_names = get_seq_names()
+        "%s-%s" % (FLAGS.tfrecord_path, FLAGS.split), n_shards=min(20,len(seq_names)))
 
     # create audio features
     if FLAGS.overwrite_audio_cache or not os.path.isdir(FLAGS.audio_cache_dir):
