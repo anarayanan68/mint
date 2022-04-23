@@ -1,4 +1,5 @@
 num_primitives: 4
+conditioning_dim: 2
 
 audio_to_blend_vec:
   transformer:

@@ -120,6 +120,8 @@ def fact_preprocessing(example, modality_to_params, is_training):
   motion_dim = modality_to_params["motion"]["feature_dim"]
   audio_dim = modality_to_params["audio"]["feature_dim"]
 
+  conditioning_dim = modality_to_params['conditioning_dim']
+
   start = 0
   # motion target: [start + shift, start + shift + motion_target_length) derived from the actual motion seq
   example["target"] = example["motion_sequence"][start +
@@ -143,6 +145,9 @@ def fact_preprocessing(example, modality_to_params, is_training):
   example["audio_input"].set_shape([motion_target_length, audio_dim])
 
   del example["audio_sequence"]
+
+  # for conditioning
+  example["conditioning_input"].set_shape([conditioning_dim])
 
   return example
 

@@ -19,6 +19,7 @@ import tensorflow as tf
 
 def create_input(train_eval_config,
                  dataset_config,
+                 encoder_config_yaml,
                  num_cpu_threads=2,
                  is_training=True,
                  use_tpu=False):
@@ -61,7 +62,6 @@ def create_input(train_eval_config,
   # conditioning
   name_to_features.update({
     'conditioning_input': tf.io.VarLenFeature(tf.float32),
-    'conditioning_input_shape': tf.io.FixedLenFeature([1], tf.int64)
   })
 
   # For training, we want a lot of parallel reading.
@@ -93,14 +93,16 @@ def create_input(train_eval_config,
       example[f"{modality}_sequence"] = tf.reshape(
           tf.sparse.to_dense(example[f"{modality}_sequence"]),
           example[f"{modality}_sequence_shape"])
-    example['conditioning_input'] = tf.reshape(
-      tf.sparse.to_dense(example['conditioning_input']),
-      example['conditioning_input_shape']
-    )
+    example['conditioning_input'] = tf.sparse.to_dense(example['conditioning_input'])
 
     return example
 
   ds = ds.map(_decode_and_reshape_record, num_parallel_calls=num_cpu_threads)
+
+  # prep for preproc
+  modality_to_params.update({
+    'conditioning_dim': encoder_config_yaml['conditioning_dim']
+  })
 
   # Data preprocessing and augmentation
   for da_step_config in dataset_config.data_augmentation_options:

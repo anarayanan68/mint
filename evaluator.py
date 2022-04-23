@@ -55,6 +55,7 @@ def evaluate():
   dataset = inputs.create_input(
       train_eval_config=eval_config,
       dataset_config=eval_dataset_config,
+      encoder_config_yaml=enc_config_yaml,
       is_training=False,
       use_tpu=False)
 

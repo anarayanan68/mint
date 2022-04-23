@@ -99,7 +99,7 @@ def _create_learning_rate(learning_rate_config):
   return lr_schedule
 
 
-def get_dataset_fn(configs):
+def get_dataset_fn(configs, encoder_config_yaml):
   """Returns tf dataset."""
 
   def dataset_fn(input_context=None):
@@ -109,6 +109,7 @@ def get_dataset_fn(configs):
     use_tpu = (FLAGS.train_strategy == TRAIN_STRATEGY[0])
     dataset = inputs.create_input(
         train_config, train_dataset_config,
+        encoder_config_yaml=encoder_config_yaml,
         use_tpu=use_tpu)
     return dataset
 
@@ -148,7 +149,7 @@ def train():
   train_config = configs['train_config']
 
   strategy = distribution_strategy()
-  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs))
+  dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, encoder_config_yaml=enc_config_yaml))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
       encoder_config_yaml=enc_config_yaml, dataset_config=configs['train_dataset'])
