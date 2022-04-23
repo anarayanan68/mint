@@ -74,6 +74,9 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, audio_name):
         int64_list=tf.train.Int64List(value=audio_sequence.shape))
 
     # make conditioning input: [0-1] floats from byte values
+    conditioning_name = motion_name[:3]
+    features['conditioning_name'] = tf.train.Feature(
+        bytes_list=tf.train.BytesList(value=[conditioning_name.encode('utf-8')]))
     conditioning_input = np.array([float(x)/255 for x in motion_name[1:3].encode('utf-8')]) # just the genre for now
     features['conditioning_input'] = tf.train.Feature(
         float_list=tf.train.FloatList(value=conditioning_input.flatten()))

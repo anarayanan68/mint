@@ -62,8 +62,6 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
     """Actions to take once before every eval loop."""
     for metric in self.metrics:
       metric.reset_states()
-    self.all_inputs = []
-    self.targets = None
 
   def eval_step(self, iterator):
     """One eval step. Called multiple times per eval loop by the superclass."""
@@ -92,24 +90,15 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
       # [batch_size, target_length, motion_feature_dimension]
       outputs = self.model(inputs)[:, :inputs["target"].shape[-2]]
       
-      if self.targets is None and self.output_dir is not None:
-        os.makedirs(self.output_dir, exist_ok=True)
-        self.targets = inputs["target"][0].numpy() # [0] for first in batch - all entries in all inputs are same for this
-
-      self.all_inputs.append(inputs["motion_enc"])
       batch_size = tf.shape(outputs)[0]
       if self.output_dir is not None:
         os.makedirs(self.output_dir, exist_ok=True)
         # save each batch instance seperately
         for i in range(batch_size):
           output = outputs[i].numpy()
-          vec = inputs["motion_enc"][i].numpy()
-          fname = '_+_'.join([
-            f"{vi:0.3f}x_P{i:02d}"
-            for i,vi in zip(vec.nonzero()[0], vec[vec.nonzero()])
-          ])
           audio_name = inputs["audio_name"][i].numpy().decode("utf-8")
-          fname = f'{fname}--audio_{audio_name}'
+          conditioning_name = inputs["conditioning_name"][i].numpy().decode("utf-8")
+          fname = f'audio_{audio_name}__cond_{conditioning_name}'
           save_path = os.path.join(self.output_dir, f"OUTPUT--{fname}.npy")
           print (f"Saving output to {save_path}")
           np.save(save_path, output)
@@ -123,17 +112,6 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
 
   def eval_end(self):
     """Actions to take once after an eval loop."""
-
-    # save targets
-    save_path = os.path.join(self.output_dir, "TARGETS.npy")
-    print (f"Saving targets to {save_path}")
-    np.save(save_path, self.targets)
-
-    # save inputs used
-    self.all_inputs = np.stack(self.all_inputs)
-    save_path = os.path.join(self.output_dir, f"INPUTS.npy")
-    print (f"Saving inputs to {save_path}")
-    np.save(save_path, self.all_inputs)
 
     with self.strategy.scope():
       # Export the metrics.

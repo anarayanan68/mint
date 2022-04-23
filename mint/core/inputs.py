@@ -61,6 +61,7 @@ def create_input(train_eval_config,
 
   # conditioning
   name_to_features.update({
+    'conditioning_name': tf.io.FixedLenFeature([], tf.string),
     'conditioning_input': tf.io.VarLenFeature(tf.float32),
   })
 
