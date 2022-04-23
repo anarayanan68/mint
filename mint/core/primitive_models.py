@@ -46,8 +46,9 @@ class BlendController(keras.Model):
 
         conditioning = inputs['conditioning_input']                     # (batch_size, conditioning_input_dim)
         conditioning_features = self.conditioning_block(conditioning)   # (batch_size, transformer_hidden_size)
+        conditioning_features = tf.expand_dims(conditioning_features, axis=1)   # (batch_size, 1, transformer_hidden_size) for broadcasting
 
-        combined_features = audio_features + conditioning_features      # (batch_size, seq_len, transformer_hidden_size) via broadcasting
+        combined_features = audio_features + conditioning_features      # (batch_size, seq_len, transformer_hidden_size)
         out_vec = self.output_block(combined_features)                  # (batch_size, num_primitives)
         return out_vec
 
