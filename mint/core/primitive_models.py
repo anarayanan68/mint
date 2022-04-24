@@ -65,7 +65,7 @@ class BlendVecToSeq(keras.Model):
         initializer = initializers.Constant(1.0 / np.sqrt(prod_target_shape)) # for unit output vector norm
         regularizer = regularizers.L2(l2=1e-3)
         self.embedding = layers.Embedding(num_primitives, prod_target_shape,
-            input_length=num_primitives, embeddings_initializer=None, embeddings_regularizer=None, name='embedding')
+            input_length=num_primitives, embeddings_initializer=initializer, embeddings_regularizer=None, name='embedding')
 
         self.emb_input = tf.convert_to_tensor(np.arange(num_primitives))
         
