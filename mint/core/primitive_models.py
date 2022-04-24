@@ -10,7 +10,7 @@ from mint.utils import inputs_util
 
 
 class BlendController(keras.Model):
-    def __init__(self, num_primitives, config_dict, name="BlendController", **kwargs):
+    def __init__(self, num_primitives, cond_vocab_size, config_dict, name="BlendController", **kwargs):
         super(BlendController, self).__init__(name=name, **kwargs)
 
         self.num_primitives = num_primitives
@@ -27,8 +27,10 @@ class BlendController(keras.Model):
             num_attention_heads=transformer_config_yaml['num_attention_heads'],
             intermediate_size=transformer_config_yaml['intermediate_size']
         )
-        self.conditioning_block = base_models.LinearEmbedding(
-            transformer_config_yaml['hidden_size'])
+
+        initializer = initializers.RandomNormal()   # so that, hopefully, each embedding is different from the start
+        self.conditioning_block = layers.Embedding(cond_vocab_size, transformer_config_yaml['hidden_size'],
+            input_length=1, embeddings_initializer=initializer, embeddings_regularizer=None, name='cond_input_embedding')
 
         output_block_config_yaml = config_dict['output_block']
         self.output_block = keras.Sequential([
@@ -45,8 +47,7 @@ class BlendController(keras.Model):
         audio_features = self.transformer(audio_features)               # (batch_size, seq_len, transformer_hidden_size)
 
         conditioning = inputs['conditioning_input']                     # (batch_size, conditioning_input_dim)
-        conditioning_features = self.conditioning_block(conditioning)   # (batch_size, transformer_hidden_size)
-        conditioning_features = tf.expand_dims(conditioning_features, axis=1)   # (batch_size, 1, transformer_hidden_size) for broadcasting
+        conditioning_features = self.conditioning_block(conditioning)   # (batch_size, 1, transformer_hidden_size)
 
         combined_features = audio_features + conditioning_features      # (batch_size, seq_len, transformer_hidden_size)
         out_vec = self.output_block(combined_features)                  # (batch_size, num_primitives)
@@ -91,6 +92,7 @@ class EncFACTJointModel(keras.Model):
 
         self.blend_controller = BlendController(
             num_primitives=encoder_config_yaml['num_primitives'],
+            cond_vocab_size=encoder_config_yaml['conditioning_vocab_size'],
             config_dict=encoder_config_yaml['audio_to_blend_vec'],
         )
         self.blend_vec_to_seq = BlendVecToSeq(

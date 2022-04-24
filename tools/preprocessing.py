@@ -37,6 +37,9 @@ flags.DEFINE_string(
 
 RNG = np.random.RandomState(42)
 
+global__cond_name_to_idx = {}
+global__next_idx = 0
+
 
 def create_tfrecord_writers(output_file, n_shards):
     writers = []
@@ -73,13 +76,18 @@ def to_tfexample(motion_sequence, audio_sequence, motion_name, audio_name):
     features['audio_sequence_shape'] = tf.train.Feature(
         int64_list=tf.train.Int64List(value=audio_sequence.shape))
 
-    # make conditioning input: [0-1] floats from byte values
+    # make conditioning input: int indices for each genre
     conditioning_name = motion_name[:3]
     features['conditioning_name'] = tf.train.Feature(
         bytes_list=tf.train.BytesList(value=[conditioning_name.encode('utf-8')]))
-    conditioning_input = np.array([float(x)/255 for x in motion_name[1:3].encode('utf-8')]) # just the genre for now
+
+    global global__cond_name_to_idx, global__next_idx
+    if conditioning_name not in global__cond_name_to_idx:
+        global__cond_name_to_idx[conditioning_name] = global__next_idx
+        global__next_idx += 1
+    conditioning_input = np.array([global__cond_name_to_idx[conditioning_name]], dtype='int64')
     features['conditioning_input'] = tf.train.Feature(
-        float_list=tf.train.FloatList(value=conditioning_input.flatten()))
+        int64_list=tf.train.Int64List(value=conditioning_input.flatten()))
 
     example = tf.train.Example(features=tf.train.Features(feature=features))
     return example
