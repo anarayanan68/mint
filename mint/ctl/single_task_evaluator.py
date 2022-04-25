@@ -99,9 +99,15 @@ class SingleTaskEvaluator(orbit.StandardEvaluator):
           audio_name = inputs["audio_name"][i].numpy().decode("utf-8")
           conditioning_name = inputs["conditioning_name"][i].numpy().decode("utf-8")
           fname = f'audio_{audio_name}__cond_{conditioning_name}'
+
           save_path = os.path.join(self.output_dir, f"OUTPUT--{fname}.npy")
           print (f"Saving output to {save_path}")
           np.save(save_path, output)
+
+          target = inputs["target"][i].numpy()
+          save_path = os.path.join(self.output_dir, f"TARGET--{fname}.npy")
+          print (f"Saving target to {save_path}")
+          np.save(save_path, target)
       # calculate metrics
       for metric in self.metrics:
         metric.update_state(inputs, outputs)
