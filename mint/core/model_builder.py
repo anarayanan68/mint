@@ -18,11 +18,11 @@ from mint.core import fact_model
 from mint.core import primitive_models
 
 
-def _build_fact_model(model_config, is_training, encoder_config_yaml=None, dataset_config=None):
+def _build_fact_model(model_config, is_training, num_primitives=None, encoder_config_yaml=None, dataset_config=None):
   if encoder_config_yaml is None:
     model = fact_model.FACTModel(model_config.fact_model, is_training)
   else:
-    model = primitive_models.EncFACTJointModel(model_config.fact_model, is_training, encoder_config_yaml, dataset_config)
+    model = primitive_models.EncFACTJointModel(model_config.fact_model, is_training, num_primitives, encoder_config_yaml, dataset_config)
   return model
 
 
@@ -31,8 +31,8 @@ MODEL_BUILDER_MAP = {
 }
 
 
-def build(model_config, is_training, encoder_config_yaml=None, dataset_config=None):
+def build(model_config, is_training, num_primitives=None, encoder_config_yaml=None, dataset_config=None):
   """Build model based on model_config."""
   model_type = model_config.WhichOneof('model')
   build_func = MODEL_BUILDER_MAP[model_type]
-  return build_func(model_config, is_training, encoder_config_yaml, dataset_config)
+  return build_func(model_config, is_training, num_primitives, encoder_config_yaml, dataset_config)

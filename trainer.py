@@ -47,7 +47,8 @@ flags.DEFINE_float('weight_decay', None, 'L2 regularization penalty to apply.')
 flags.DEFINE_float('grad_clip_norm', 0., 'Clip gradients by norm.')
 flags.DEFINE_float('tvloss_weight', 0., 'Scale factor for TV Loss, zero if not provided.')
 flags.DEFINE_string('enc_cfg_yaml_path', None,
-                    'Path to YAML config file for the name encoder network.')
+                    'Path to YAML config file for the encoder network.')
+flags.DEFINE_integer('num_primitives', 20, 'Number of primitives to learn')
 
 def _create_learning_rate(learning_rate_config):
   """Create optimizer learning rate based on config.
@@ -152,6 +153,7 @@ def train():
   dataset = strategy.distribute_datasets_from_function(get_dataset_fn(configs, encoder_config_yaml=enc_config_yaml))
   with strategy.scope():
     model_ = model_builder.build(model_config, True,
+      num_primitives=FLAGS.num_primitives,
       encoder_config_yaml=enc_config_yaml, dataset_config=configs['train_dataset'])
     lr_schedule = _create_learning_rate(train_config.learning_rate)
     optimizer = tf.keras.optimizers.Adam(lr_schedule)

@@ -87,16 +87,16 @@ class BlendVecToSeq(keras.Model):
 
 
 class EncFACTJointModel(keras.Model):
-    def __init__(self, fact_config, is_training, encoder_config_yaml, dataset_config, name="EncFACTJointModel", **kwargs):
+    def __init__(self, fact_config, is_training, num_primitives, encoder_config_yaml, dataset_config, name="EncFACTJointModel", **kwargs):
         super(EncFACTJointModel, self).__init__(name=name, **kwargs)
 
         self.blend_controller = BlendController(
-            num_primitives=encoder_config_yaml['num_primitives'],
+            num_primitives=num_primitives,
             cond_vocab_size=encoder_config_yaml['conditioning_vocab_size'],
             config_dict=encoder_config_yaml['audio_to_blend_vec'],
         )
         self.blend_vec_to_seq = BlendVecToSeq(
-            num_primitives=encoder_config_yaml['num_primitives'],
+            num_primitives=num_primitives,
             config_dict=encoder_config_yaml['blend_vec_to_seq'],
         )
         self.fact_stage = fact_model.FACTModel(fact_config, is_training)

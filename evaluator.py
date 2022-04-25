@@ -42,7 +42,8 @@ flags.DEFINE_string('head_initializer', 'he_normal',
                     'Initializer for prediction head.')
 flags.DEFINE_float('timeout_sec', 70000, 'The timeout to wait for the next checkpoint, as per tf.train.checkpoints_iterator. Pass a small value to run once and exit.')
 flags.DEFINE_string('enc_cfg_yaml_path', None,
-                    'Path to YAML config file for the name encoder network.')
+                    'Path to YAML config file for the encoder network.')
+flags.DEFINE_integer('num_primitives', 20, 'Number of primitives to learn')
 
 def evaluate():
   """Evaluates the given model."""
@@ -59,7 +60,7 @@ def evaluate():
       is_training=False,
       use_tpu=False)
 
-  model_ = model_builder.build(model_config, True, encoder_config_yaml=enc_config_yaml, dataset_config=eval_dataset_config)
+  model_ = model_builder.build(model_config, True, num_primitives=FLAGS.num_primitives, encoder_config_yaml=enc_config_yaml, dataset_config=eval_dataset_config)
   model_.global_step = tf.Variable(initial_value=0, dtype=tf.int64)
   metrics_ = model_.get_metrics(eval_config)
   evaluator = single_task_evaluator.SingleTaskEvaluator(
