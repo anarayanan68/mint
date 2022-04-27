@@ -76,14 +76,34 @@ class BlendVecToSeq(keras.Model):
         # then batch matrix mult of vec with embedding will yield weighted average, which can be reshaped and returned
 
         batch_size = vec.shape[0]
+
         # collect all possible indices, repeated per batch
         emb_input = tf.broadcast_to(self.emb_input, (batch_size, self.num_primitives))
+
         # get embeddings for all indices in correct dtype
-        embeddings = tf.cast(self.embedding(emb_input), vec.dtype)
+        embeddings = tf.cast(self.embedding(emb_input), vec.dtype)  # (batch_size, num_primitives, prod(target_shape))
+        self.primitives = tf.reshape(embeddings, (batch_size, self.num_primitives) + self.target_shape) # (batch_size, self.num_primitives, *self.target_shape)
+
         # get weighted average according to input vector
-        res = tf.matmul(tf.expand_dims(vec, 1), embeddings)
+        res = tf.matmul(tf.expand_dims(vec, 1), embeddings) # (batch_size, 1, num_primitives) x (batch_size, num_primitives, prod(target_shape))
+                                                            # i.e. (batch_size, 1, prod(target_shape))
+
         # reshape to target shape and return
         return tf.reshape(res, (batch_size,) + self.target_shape)
+
+
+    def primitive_loss(self, target_tensors):
+        batch_size, target_seq_len, feat_dim = base_model_util.get_shape_list(target_tensors)
+
+        # L2 loss per primitive, self.primitives is of shape: (batch_size, self.num_primitives, *self.target_shape)
+        # broadcast target to get a loss for each target motion w.r.t each primitive
+        target_broadcast = tf.broadcast_to(
+            tf.expand_dims(target_tensors, axis=1),
+            (batch_size, self.num_primitives, target_seq_len, feat_dim)
+        )
+        diff = target_broadcast - self.primitives[:, :, :target_seq_len]
+        l2_loss = tf.reduce_mean(tf.square(diff))
+        return l2_loss
 
 
 class EncFACTJointModel(keras.Model):
@@ -131,4 +151,7 @@ class EncFACTJointModel(keras.Model):
 
 
     def loss(self, target_tensors, pred_tensors, inputs):
-        return self.fact_stage.loss(target_tensors, pred_tensors, inputs)
+        return (
+            self.fact_stage.loss(target_tensors, pred_tensors, inputs) +
+            1e-2 * self.blend_vec_to_seq.primitive_loss(target_tensors)
+        )
